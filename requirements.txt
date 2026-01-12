@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+jinja2
+markdown
+python-multipart
+python-dotenv
+langchain-ollama

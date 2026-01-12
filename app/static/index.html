@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Second Opinion</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<h1>Second Opinion</h1>
+
+<div class="disclaimer">
+    Second Opinion surfaces common failure patterns based on available information. 
+    It is intentionally conservative and does not guarantee completeness.
+</div>
+
+<form action="/submit" method="post" id="submitForm" enctype="multipart/form-data">
+    <p><strong>Paste your RFC, design document, or PR description.</strong><br>
+    We'll review it for failure modes that often surface only at scale or during partial outages.</p>
+    
+    <div class="file-upload-section">
+        <h3>Option 1: Upload a File</h3>
+        <label for="file">Upload RFC, design document, or PR description (Markdown, Text, or other formats):</label>
+        <input type="file" name="file" id="file" accept=".md,.markdown,.txt,.rst,.adoc,.asciidoc,.text">
+        <div class="file-info">Supported formats: .md, .txt, .rst, .adoc, .text</div>
+        <div id="fileInfo" class="file-info-selected"></div>
+    </div>
+    
+    <div class="input-divider">OR</div>
+    
+    <div>
+        <label for="document"><strong>Option 2: Paste Text</strong></label>
+        <textarea name="document" id="document" rows="15" cols="100" 
+                  placeholder="Paste your RFC, design document, or PR description here..."></textarea>
+    </div>
+    
+    {% if error %}
+    <div class="error-message">
+        <strong>Error:</strong> {{ error }}
+    </div>
+    {% endif %}
+    
+    <br>
+    
+    <div class="metadata-section">
+        <h3>Optional Context (Not Required)</h3>
+        <label for="expected_scale_qps">Expected scale (QPS):</label>
+        <input type="text" name="expected_scale_qps" id="expected_scale_qps" 
+               placeholder="e.g., 10k QPS">
+        
+        <label for="expected_data_size">Expected data size:</label>
+        <input type="text" name="expected_data_size" id="expected_data_size" 
+               placeholder="e.g., 100GB">
+        
+        <label for="critical_slos_latency">Critical SLOs (latency):</label>
+        <input type="text" name="critical_slos_latency" id="critical_slos_latency" 
+               placeholder="e.g., p99 < 200ms">
+        
+        <label for="critical_slos_availability">Critical SLOs (availability):</label>
+        <input type="text" name="critical_slos_availability" id="critical_slos_availability" 
+               placeholder="e.g., 99.9%">
+        
+        <label for="known_dependencies">Known dependencies:</label>
+        <textarea name="known_dependencies" id="known_dependencies" rows="3" 
+                  placeholder="e.g., Redis, PostgreSQL, S3"></textarea>
+    </div>
+    
+    <button type="submit" id="submitBtn">Analyze</button>
+</form>
+
+{% if loading %}
+<div class="loading">
+    <p>Reviewing architectural assumptions and known distributed-systems failure patterns…</p>
+</div>
+{% endif %}
+
+{% if report %}
+<div class="report-section">
+    <h2>Second Opinion Report</h2>
+    
+    <!-- Document Reference -->
+    {% if report.document_sections %}
+    <div class="document-sections">
+        <strong>Document Sections:</strong> 
+        <span>{{ report.document_sections|join(' → ') }}</span>
+    </div>
+    {% endif %}
+    
+    <!-- Section 1: Overview -->
+    <div class="overview-box">
+        <h3>Overview</h3>
+        
+        <div class="overview-item">
+            <strong>Risk Profile:</strong>
+            <span class="confidence-badge confidence-{{ report.overall_risk.lower() }} confidence-badge-inline">
+                {{ report.overall_risk }}
+            </span>
+        </div>
+        
+        {% if report.primary_concern %}
+        <div class="overview-item">
+            <strong>Primary Concern:</strong>
+            <div class="overview-item-content">{{ report.primary_concern }}</div>
+        </div>
+        {% endif %}
+        
+        {% if report.why_this_matters %}
+        <div class="overview-item">
+            <strong>Why this matters:</strong>
+            <div class="overview-item-content-secondary">{{ report.why_this_matters }}</div>
+        </div>
+        {% endif %}
+        
+        <div class="overview-item">
+            <strong>Summary:</strong>
+            <div class="overview-item-content-secondary">{{ report.summary }}</div>
+        </div>
+        
+        <p class="overview-note">
+            <em>{{ report.confidence_note }}</em>
+        </p>
+    </div>
+    
+    <div class="section-divider"></div>
+    
+    <!-- Section 2: Potential Failure Modes -->
+    <h3>Potential Failure Modes</h3>
+    <p class="secondary-text failure-modes-intro">
+        {% if report.failure_modes|length == 0 %}
+        No strong failure patterns identified based on the provided design.
+        {% else %}
+        Found <strong>{{ report.failure_modes|length }}</strong> relevant pattern{{ 's' if report.failure_modes|length != 1 else '' }}. 
+        Click to expand details.
+        {% endif %}
+    </p>
+    
+    {% if report.failure_modes %}
+        {% for f in report.failure_modes %}
+        <div class="failure-mode">
+            <div class="failure-mode-header" onclick="toggleDetails({{ loop.index0 }})">
+                <div class="failure-mode-header-content">
+                    <span class="failure-mode-number">
+                        {{ loop.index }}
+                    </span>
+                    <div>
+                        <h4 class="failure-mode-title">{{ f.name }}</h4>
+                        <div class="failure-mode-meta">
+                            <span class="confidence-badge confidence-{{ f.confidence.lower() }}">
+                                {{ f.confidence }} confidence
+                            </span>
+                            {% if f.match_strength %}
+                            <span class="match-percentage">
+                                {{ "%.0f"|format(f.match_strength * 100) }}% match
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <span class="toggle-icon" id="toggle-{{ loop.index0 }}">▶</span>
+            </div>
+            
+            <div class="failure-mode-summary">
+                {% if f.evidence %}
+                <div class="evidence-preview">
+                    <strong>Evidence:</strong>
+                    <div class="evidence-preview-content">
+                        {{ f.evidence[0] }}{% if f.evidence|length > 1 %} <em>(+{{ f.evidence|length - 1 }} more)</em>{% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% if f.trigger_conditions %}
+                <div class="trigger-preview">
+                    <strong>Triggers:</strong> {{ f.trigger_conditions[0] }}{% if f.trigger_conditions|length > 1 %} <em>(+{{ f.trigger_conditions|length - 1 }} more)</em>{% endif %}
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="failure-mode-details" id="details-{{ loop.index0 }}">
+                {% if f.evidence and f.evidence|length > 1 %}
+                <div class="detail-section">
+                    <div class="detail-section-title">Evidence from Document</div>
+                    <div class="evidence-container">
+                        {% for ev in f.evidence %}
+                        <div class="evidence-item">
+                            {{ ev }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="detail-section">
+                    <div class="detail-section-title">Trigger Conditions</div>
+                    <ul>
+                        {% for condition in f.trigger_conditions %}
+                        <li class="list-item-small">{{ condition }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                
+                <div class="detail-section">
+                    <div class="detail-section-title">Why This Is Easy to Miss</div>
+                    <ul>
+                        {% for reason in f.why_subtle %}
+                        <li class="list-item-small">{{ reason }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                
+                {% if f.impact_surface %}
+                <div class="detail-section">
+                    <div class="detail-section-title">Impact Surface</div>
+                    <ul>
+                        {% for impact in f.impact_surface %}
+                        <li class="list-item-small">{{ impact }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                
+                <div class="detail-section">
+                    <div class="detail-section-title">Questions to Consider</div>
+                    <ul>
+                        {% for question in f.discussion_questions %}
+                        <li class="list-item-small">{{ question }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% endif %}
+    
+    <div class="section-divider"></div>
+    
+    <!-- Section 3: Implicit Assumptions -->
+    <h3>Implicit Assumptions</h3>
+    {% if report.assumptions %}
+        <div class="assumptions-box">
+            {% for a in report.assumptions %}
+            <div class="assumption-item">
+                {{ a.text }}
+            </div>
+            {% endfor %}
+        </div>
+        <p class="assumptions-note">{{ report.assumptions_note }}</p>
+    {% else %}
+        <p class="secondary-text">No explicit assumptions detected.</p>
+    {% endif %}
+    
+    <div class="section-divider"></div>
+    
+    <!-- Section 4: Explicitly Ruled-Out Risks -->
+    <h3>Ruled-Out Risks</h3>
+    {% if report.ruled_out %}
+        <p class="secondary-text ruled-out-note">{{ report.ruled_out_note }}</p>
+        <ul class="ruled-out-box">
+            {% for r in report.ruled_out %}
+            <li>{{ r }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="secondary-text">No risks were clearly ruled out based on the design analysis.</p>
+    {% endif %}
+    
+    <div class="section-divider"></div>
+    
+    <!-- Section 5: Unknowns / Not Evaluated -->
+    <h3>Unknowns / Not Evaluated</h3>
+    {% if report.unknowns %}
+        <ul class="unknowns-box">
+            {% for unknown in report.unknowns %}
+            <li>{{ unknown }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="secondary-text">No significant unknowns detected. Design appears to cover critical dimensions.</p>
+    {% endif %}
+    
+    <div class="section-divider"></div>
+    
+    <!-- Version Information -->
+    {% if report.version_info %}
+    <div class="version-info">
+        <strong>Version Info:</strong> 
+        Patterns {{ report.version_info.pattern_version[:8] }} | 
+        Model {{ report.version_info.model_name }} | 
+        Temp {{ report.version_info.temperature }}
+    </div>
+    {% endif %}
+</div>
+
+<div class="non-claims">
+    <h3>Explicit Non-Claims</h3>
+    <p>Second Opinion explicitly does <strong>not</strong> claim to:</p>
+    <ul>
+        <li>Predict outages</li>
+        <li>Certify designs</li>
+        <li>Ensure reliability</li>
+        <li>Replace human judgment</li>
+        <li>Evaluate business correctness</li>
+    </ul>
+</div>
+{% endif %}
+
+<script>
+    // Toggle failure mode details
+    function toggleDetails(index) {
+        const details = document.getElementById('details-' + index);
+        const icon = document.getElementById('toggle-' + index);
+        
+        if (details.classList.contains('expanded')) {
+            details.classList.remove('expanded');
+            icon.classList.remove('expanded');
+            icon.textContent = '▶';
+        } else {
+            details.classList.add('expanded');
+            icon.classList.add('expanded');
+            icon.textContent = '▼';
+        }
+    }
+    
+    // Handle file selection
+    document.getElementById('file').addEventListener('change', function(e) {
+        var fileInfo = document.getElementById('fileInfo');
+        var fileInput = e.target;
+        var textarea = document.getElementById('document');
+        
+        if (fileInput.files && fileInput.files.length > 0) {
+            var fileName = fileInput.files[0].name;
+            var fileSize = (fileInput.files[0].size / 1024).toFixed(2);
+            fileInfo.textContent = 'Selected: ' + fileName + ' (' + fileSize + ' KB)';
+            fileInfo.classList.add('file-info-success');
+            
+            // Clear textarea when file is selected
+            textarea.value = '';
+            textarea.placeholder = 'File selected. Text input will be ignored.';
+        } else {
+            fileInfo.textContent = '';
+            textarea.placeholder = 'Paste your RFC, design document, or PR description here...';
+        }
+    });
+    
+    // Handle textarea input
+    document.getElementById('document').addEventListener('input', function(e) {
+        var fileInput = document.getElementById('file');
+        if (e.target.value.trim() && fileInput.files && fileInput.files.length > 0) {
+            // Clear file selection if text is entered
+            fileInput.value = '';
+            document.getElementById('fileInfo').textContent = '';
+        }
+    });
+    
+    // Handle form submission to show loading state
+    document.getElementById('submitForm').addEventListener('submit', function(e) {
+        var btn = document.getElementById('submitBtn');
+        var fileInput = document.getElementById('file');
+        var textarea = document.getElementById('document');
+        
+        // Validate that at least one input is provided
+        if (!fileInput.files || fileInput.files.length === 0) {
+            if (!textarea.value || !textarea.value.trim()) {
+                e.preventDefault();
+                alert('Please provide either a file upload or paste text in the text area.');
+                return false;
+            }
+        }
+        
+        btn.disabled = true;
+        btn.textContent = 'Analyzing...';
+        
+        // Note: In a real implementation, you might want to use AJAX to show loading state
+        // For now, the form will submit and the server will handle it
+    });
+</script>
+</body>
+</html>
