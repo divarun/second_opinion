@@ -105,7 +105,6 @@ Click on any failure mode to expand and see detailed evidence, trigger condition
 - 🎯 **Confidence Scoring**: High/Medium/Low confidence based on match strength
 - 📊 **Structured Reports**: Discussion-ready pre-mortem reviews
 - 🔗 **Evidence Tracking**: Links findings to document sections
-- **Clean UI**: Modern, collapsible interface
 
 ## Need More Details?
 

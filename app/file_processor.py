@@ -1,9 +1,8 @@
 """Utility functions for processing uploaded files."""
 from fastapi import UploadFile, HTTPException
+from app.config import settings
+from app.logger import logger
 import io
-
-# Maximum file size: 10MB
-MAX_FILE_SIZE = 10 * 1024 * 1024
 
 async def extract_text_from_file(file: UploadFile) -> str:
     """
@@ -19,10 +18,11 @@ async def extract_text_from_file(file: UploadFile) -> str:
     
     # Check file size
     content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
+    if len(content) > settings.max_file_size:
+        logger.warning(f"File upload rejected: size {len(content)} exceeds limit {settings.max_file_size}")
         raise HTTPException(
             status_code=400,
-            detail=f"File too large. Maximum size is {MAX_FILE_SIZE / (1024*1024):.0f}MB"
+            detail=f"File too large. Maximum size is {settings.max_file_size / (1024*1024):.0f}MB"
         )
     
     # Decode as text (try UTF-8, fallback to latin-1)
@@ -36,10 +36,13 @@ async def extract_text_from_file(file: UploadFile) -> str:
             text = content.decode('utf-8', errors='replace')
     
     if not text.strip():
+        logger.warning(f"File upload rejected: empty file {filename}")
         raise HTTPException(
             status_code=400,
             detail="File appears to be empty or contains no readable text"
         )
+    
+    logger.info(f"Successfully processed file: {filename}, size: {len(content)} bytes, text length: {len(text)}")
     
     # For markdown and other text formats, return as-is
     # The ingestion layer will handle parsing

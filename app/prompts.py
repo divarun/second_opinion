@@ -5,6 +5,23 @@ Centralized location for all LLM prompts used in the system.
 This enables versioning, consistency, and easier maintenance.
 """
 
+
+def sanitize_for_prompt(text: str) -> str:
+    """Sanitize user input to prevent prompt injection.
+    
+    Args:
+        text: User input text
+        
+    Returns:
+        Sanitized text
+    """
+    # Remove potential prompt injection patterns
+    text = text.replace("```", "")
+    text = text.replace("Ignore previous instructions", "")
+    text = text.replace("Ignore all previous", "")
+    # Limit length to prevent token issues
+    return text[:1000]
+
 # System Prompt
 SYSTEM_PROMPT = """You are a Senior Staff Engineer. Review this RFC, design document, or PR description for architectural bottlenecks, security risks, and scalability concerns. Be concise and critical."""
 
@@ -18,7 +35,8 @@ def get_assumption_extraction_prompt(section_heading: str, section_content: str)
         section_heading: The heading of the section
         section_content: The content of the section (will be truncated to 1000 chars)
     """
-    content_snippet = section_content[:1000]  # Limit to avoid token issues
+    # Sanitize and limit content to prevent prompt injection
+    content_snippet = sanitize_for_prompt(section_content)
     
     return f"""Extract implicit assumptions from this design section.
 Focus on:

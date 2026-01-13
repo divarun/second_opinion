@@ -1,9 +1,12 @@
+"""Extract implicit assumptions from design documents."""
 from app.models import Assumption, ConfidenceLevel, ParsedDocument
-from app.llm import call_llm
+from app.llm import call_llm_async, LLMError
 from app.prompts import get_assumption_extraction_prompt
+from app.logger import logger
 import re
 
-def extract_assumptions(parsed_doc: ParsedDocument) -> list[Assumption]:
+
+async def extract_assumptions(parsed_doc: ParsedDocument) -> list[Assumption]:
     """
     Extract implicit assumptions from RFC, design document, or PR description.
     Targets modal language, stability claims, and invariant claims.
@@ -27,7 +30,7 @@ def extract_assumptions(parsed_doc: ParsedDocument) -> list[Assumption]:
             prompt = get_assumption_extraction_prompt(section.heading, section.content)
             
             try:
-                response = call_llm(prompt)
+                response = await call_llm_async(prompt)
                 
                 # Parse response
                 for line in response.splitlines():
@@ -45,8 +48,12 @@ def extract_assumptions(parsed_doc: ParsedDocument) -> list[Assumption]:
                                     confidence=ConfidenceLevel.medium
                                 )
                             )
-            except Exception:
+            except LLMError as e:
+                logger.warning(f"Failed to extract assumptions from section '{section.heading}': {e}")
                 # Graceful failure - continue with other sections
+                continue
+            except Exception as e:
+                logger.error(f"Unexpected error extracting assumptions from section '{section.heading}'", exc_info=True)
                 continue
     
     return assumptions

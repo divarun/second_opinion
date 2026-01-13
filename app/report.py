@@ -1,12 +1,15 @@
+"""Report generation for Second Opinion."""
 from app.models import SecondOpinionReport, ConfidenceLevel, ParsedDocument
-from app.llm import call_llm
+from app.llm import call_llm_async, LLMError
 from app.prompts import get_why_this_matters_prompt
 from app.ruled_out import determine_ruled_out_risks
 from app.unknowns import detect_unknowns
 from app.versioning import get_version_info
 from app.patterns import FailurePatternLibrary
+from app.logger import logger
 
-def generate_why_this_matters(primary_concern: str, failure_modes) -> str:
+
+async def generate_why_this_matters(primary_concern: str, failure_modes) -> str:
     """Generate explanation of why the primary concern matters."""
     if not primary_concern or not failure_modes:
         return None
@@ -22,11 +25,16 @@ def generate_why_this_matters(primary_concern: str, failure_modes) -> str:
     )
     
     try:
-        return call_llm(prompt)
-    except Exception:
+        return await call_llm_async(prompt)
+    except LLMError as e:
+        logger.warning(f"Failed to generate 'why this matters' for {primary_concern}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error generating 'why this matters'", exc_info=True)
         return None
 
-def build_report(
+
+async def build_report(
     failure_modes, 
     assumptions, 
     parsed_doc: ParsedDocument,
@@ -53,7 +61,7 @@ def build_report(
     primary = sorted_modes[0].name if sorted_modes else None
     
     # Generate "why this matters" explanation
-    why_matters = generate_why_this_matters(primary, sorted_modes)
+    why_matters = await generate_why_this_matters(primary, sorted_modes)
     
     # Determine ruled-out risks dynamically
     ruled_out = determine_ruled_out_risks(parsed_doc_text, sorted_modes)
@@ -71,8 +79,9 @@ def build_report(
     if sorted_modes:
         from app.synthesis import synthesize_summary
         try:
-            summary_text = synthesize_summary(sorted_modes)
-        except Exception:
+            summary_text = await synthesize_summary(sorted_modes)
+        except Exception as e:
+            logger.error("Failed to synthesize summary", exc_info=True)
             # Fallback to default
             pass
     

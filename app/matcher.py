@@ -1,7 +1,32 @@
+"""Pattern matching engine for failure patterns."""
 from app.models import FailurePatternMatch, ConfidenceLevel
+from app.logger import logger
 import re
+from functools import lru_cache
+from typing import List, Dict, Any
 
-def derive_impact_surface(pattern: dict) -> list:
+# Constants
+CONTEXT_WINDOW_SIZE = 100  # Characters before/after match for context extraction
+MAX_CONTEXT_LENGTH = 200  # Maximum context snippet length
+CONTEXT_TRUNCATE_BEFORE = 80  # Characters before signal in truncated context
+CONTEXT_TRUNCATE_AFTER = 80  # Characters after signal in truncated context
+MIN_DOCUMENT_LENGTH = 10  # Minimum document length to process
+
+
+@lru_cache(maxsize=1000)
+def compile_signal_pattern(signal: str) -> re.Pattern:
+    """Compile and cache regex pattern for signal matching.
+    
+    Args:
+        signal: Signal keyword to match
+        
+    Returns:
+        Compiled regex pattern
+    """
+    return re.compile(r'\b' + re.escape(signal.lower()) + r'\b')
+
+
+def derive_impact_surface(pattern: Dict[str, Any]) -> List[str]:
     """Derive impact surface from pattern metadata when not explicitly provided."""
     impact_surface = []
     pattern_name = pattern["name"].lower()
@@ -33,8 +58,16 @@ def match_patterns(parsed_doc, pattern_library, assumptions=None):
     Match failure patterns against document content.
     Enhanced scoring with assumption reinforcement and mitigation detection.
     Only returns patterns that have at least one matching signal.
+    
+    Args:
+        parsed_doc: ParsedDocument with sections
+        pattern_library: FailurePatternLibrary instance
+        assumptions: Optional list of Assumption objects
+        
+    Returns:
+        List of FailurePatternMatch objects
     """
-    matches = []
+    pattern_matches = []
     assumptions = assumptions or []
 
     full_text = " ".join(
@@ -42,8 +75,11 @@ def match_patterns(parsed_doc, pattern_library, assumptions=None):
     )
     
     # If document is empty or too short, return no matches
-    if not full_text or len(full_text.strip()) < 10:
-        return matches
+    if not full_text or len(full_text.strip()) < MIN_DOCUMENT_LENGTH:
+        logger.debug(f"Document too short ({len(full_text.strip())} chars), skipping pattern matching")
+        return pattern_matches
+    
+    logger.info(f"Matching patterns against document with {len(parsed_doc.sections)} sections")
 
     for pattern in pattern_library.all():
         evidence = []
@@ -54,7 +90,7 @@ def match_patterns(parsed_doc, pattern_library, assumptions=None):
         # Primary scoring: signal matching with section-level tracking and context extraction
         for signal in pattern["signals"]:
             signal_lower = signal.lower()
-            pattern_re = r'\b' + re.escape(signal_lower) + r'\b'
+            pattern_re = compile_signal_pattern(signal)
             
             # Check each section individually to track where signals appear and extract context
             matching_sections = []
@@ -63,13 +99,13 @@ def match_patterns(parsed_doc, pattern_library, assumptions=None):
             for section in parsed_doc.sections:
                 # Use original content for matching to preserve case in context
                 section_lower = section.content.lower()
-                matches = list(re.finditer(pattern_re, section_lower))
-                if matches:
+                match_results = list(pattern_re.finditer(section_lower))
+                if match_results:
                     matching_sections.append(section.heading)
                     # Extract context around first match in this section
-                    first_match = matches[0]
-                    start_pos = max(0, first_match.start() - 100)
-                    end_pos = min(len(section.content), first_match.end() + 100)
+                    first_match = match_results[0]
+                    start_pos = max(0, first_match.start() - CONTEXT_WINDOW_SIZE)
+                    end_pos = min(len(section.content), first_match.end() + CONTEXT_WINDOW_SIZE)
                     context = section.content[start_pos:end_pos].strip()
                     
                     # Only add if we successfully extracted context
@@ -77,14 +113,14 @@ def match_patterns(parsed_doc, pattern_library, assumptions=None):
                         # Clean up context (remove extra whitespace, ensure it's readable)
                         context_cleaned = ' '.join(context.split())
                         # Truncate if too long, but keep it meaningful
-                        if len(context_cleaned) > 200:
+                        if len(context_cleaned) > MAX_CONTEXT_LENGTH:
                             # Find the signal position in the cleaned context (case-insensitive)
                             context_lower = context_cleaned.lower()
                             signal_pos = context_lower.find(signal_lower)
                             if signal_pos >= 0:
-                                # Show 80 chars before and after signal
-                                before_start = max(0, signal_pos - 80)
-                                after_end = min(len(context_cleaned), signal_pos + len(signal) + 80)
+                                # Show CONTEXT_TRUNCATE_BEFORE chars before and after signal
+                                before_start = max(0, signal_pos - CONTEXT_TRUNCATE_BEFORE)
+                                after_end = min(len(context_cleaned), signal_pos + len(signal) + CONTEXT_TRUNCATE_AFTER)
                                 context_final = context_cleaned[before_start:after_end]
                                 if before_start > 0:
                                     context_final = "..." + context_final
@@ -93,7 +129,7 @@ def match_patterns(parsed_doc, pattern_library, assumptions=None):
                                 context_snippets.append((section.heading, context_final, signal))
                             else:
                                 # Signal not found after cleaning (shouldn't happen, but fallback)
-                                context_snippets.append((section.heading, context_cleaned[:200] + "...", signal))
+                                context_snippets.append((section.heading, context_cleaned[:MAX_CONTEXT_LENGTH] + "...", signal))
                         else:
                             # Context is short enough, use as-is
                             context_snippets.append((section.heading, context_cleaned, signal))
@@ -179,7 +215,7 @@ def match_patterns(parsed_doc, pattern_library, assumptions=None):
         if not impact_surface:
             impact_surface = derive_impact_surface(pattern)
 
-        matches.append(
+        pattern_matches.append(
             FailurePatternMatch(
                 pattern_id=pattern["id"],
                 name=pattern["name"],
@@ -193,4 +229,5 @@ def match_patterns(parsed_doc, pattern_library, assumptions=None):
             )
         )
 
-    return matches
+    logger.info(f"Matched {len(pattern_matches)} failure patterns")
+    return pattern_matches
