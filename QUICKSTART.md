@@ -184,28 +184,6 @@ COPY . .
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-## Architecture Improvements Over Original
-
-1. **Simplified Structure**
-    - Single-file modules vs nested packages
-    - 7 files vs 15+ files
-    - ~1,500 lines vs ~3,000+ lines
-
-2. **Direct Dependencies**
-    - No abstraction layers
-    - Direct Ollama API calls
-    - Flat data models
-
-3. **Cleaner Code**
-    - Less boilerplate
-    - Fewer classes
-    - Clear responsibilities
-
-4. **Maintained Features**
-    - All 16 patterns
-    - Full analysis pipeline
-    - Complete UI
-    - API endpoints
 
 ## Performance Tips
 

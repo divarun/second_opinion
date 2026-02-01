@@ -77,8 +77,12 @@ Then open **http://localhost:8000** in your browser.
 - Click "Analyze Document"
 
 ### 3. Review Results
-The analysis provides:
-- **Failure Modes**: Ranked list of potential failures with evidence
+The analysis provides a comprehensive breakdown of your system's resilience.
+
+![Second Opinion Report Screenshot](./samples/sample_report.png)
+
+The report includes:
+- **Failure Modes**: Ranked list of potential failures with evidenc
 - **Implicit Assumptions**: Unstated expectations in the design
 - **Known Unknowns**: Missing critical information
 - **Ruled Out Risks**: Patterns that don't apply
@@ -92,7 +96,7 @@ Click on any failure mode to see:
 ## Project Structure
 
 ```
-second_opinion_simplified/
+second_opinion/
 ├── app.py              # Main FastAPI application
 ├── analyzer.py         # Core analysis engine
 ├── patterns.py         # Failure pattern definitions
@@ -107,7 +111,6 @@ second_opinion_simplified/
 ├── requirements.txt   # Python dependencies
 └── .env.example       # Example configuration
 
-Total: ~1,500 lines of code (simplified from original)
 ```
 
 ## API Endpoints
@@ -230,66 +233,15 @@ OLLAMA_MODEL=qwen2.5:14b
 - Use a quantized model: `llama3:8b-q4_0`
 - Reduce `MAX_DOCUMENT_SIZE` in `.env`
 
-## Comparison with Original
-
-**Simplified Version:**
-- ~1,500 lines of code (vs ~3,000+)
-- 7 core files (vs 15+)
-- Single-file modules
-- No complex abstractions
-- Direct Ollama integration
-- Flat data models
-
-**Maintained Features:**
-- All 16 failure patterns
-- Complete analysis pipeline
-- Web UI with file upload
-- Confidence scoring
-- Evidence tracking
-- Discussion questions
-
-**Removed Complexity:**
-- Multiple route files
-- Complex service layers
-- Over-abstracted data models
-- Nested module structure
-- Redundant validations
-
-## Development
-
-### Run Tests
-```bash
-# Install dev dependencies
-pip install pytest pytest-asyncio httpx
-
-# Run tests
-pytest
-```
-
-### Code Style
-```bash
-# Format code
-pip install black
-black .
-
-# Lint
-pip install flake8
-flake8 .
-```
 
 ## License
 
-MIT License - See LICENSE file
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-This is a simplified educational version. For the full-featured version, see:
-https://github.com/divarun/second_opinion
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on:
 
-## Acknowledgments
-
-Based on the original Second Opinion by divarun.
-Simplified for clarity and ease of understanding.
 
 ---
 
