@@ -155,7 +155,7 @@ Model selection is configurable via environment variables.
 
 For installation, configuration, usage examples, and deployment:
 
-👉 **See [Quick Reference Guide](quickstart.md)**
+👉 **See [Quick Reference Guide](QUICKSTART.md)**
 
 You can be up and running in about five minutes.
 
