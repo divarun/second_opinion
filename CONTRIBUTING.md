@@ -61,7 +61,7 @@ git checkout -b fix/your-bug-fix
 
 ```bash
 # Run the application
-uvicorn app.main:app --reload
+python app.py
 
 # Test with sample documents
 # Verify the UI works correctly
@@ -145,8 +145,9 @@ Then create a Pull Request on GitHub with:
 
 ### UI Changes
 
-- HTML templates: `app/static/index.html`
+- HTML templates: `app/templates/index.html`
 - CSS styles: `app/static/styles.css`
+- JS: `app/static/script.js`
 - Keep the UI clean and accessible
 - Test on different screen sizes
 

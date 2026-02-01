@@ -1,54 +1,61 @@
-from enum import Enum
-from pydantic import BaseModel
+"""
+Data Models
+Simplified Pydantic models for analysis results
+"""
+from pydantic import BaseModel, Field
 from typing import List, Optional
+from enum import Enum
+
 
 class ConfidenceLevel(str, Enum):
-    high = "High"
-    medium = "Medium"
-    low = "Low"
+    """Confidence levels for pattern matching"""
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
-class DocumentSection(BaseModel):
-    heading: str
-    content: str
-    confidence_weight: str = "medium"  # high, medium, low
 
-class ParsedDocument(BaseModel):
-    sections: List[DocumentSection]
+class PatternCategory(str, Enum):
+    """Categories of failure patterns"""
+    LOAD = "load"
+    DEPENDENCY = "dependency"
+    DATA = "data"
+    TIMING = "timing"
+    RESOURCE = "resource"
+    DISTRIBUTED = "distributed"
 
-class Assumption(BaseModel):
-    text: str
-    source_section: str
-    confidence: ConfidenceLevel
 
-class FailurePatternMatch(BaseModel):
-    pattern_id: str
+class FailurePattern(BaseModel):
+    """Definition of a distributed systems failure pattern"""
+    id: str
     name: str
+    description: str
+    category: PatternCategory
+    indicators: List[str] = Field(default_factory=list)
+    why_easy_to_miss: str = ""
+
+    class Config:
+        use_enum_values = True
+
+
+class Finding(BaseModel):
+    """A matched failure mode from analysis"""
+    pattern_id: str
+    pattern_name: str
     confidence: ConfidenceLevel
-    match_strength: Optional[float] = None  # 0.0 to 1.0
-    evidence: List[str]
-    trigger_conditions: List[str]
-    why_subtle: List[str]
-    impact_surface: List[str]  # Derived from pattern metadata
-    discussion_questions: List[str]
+    match_score: float = Field(ge=0.0, le=1.0)
+    evidence: List[str] = Field(default_factory=list)
+    trigger_conditions: List[str] = Field(default_factory=list)
+    why_easy_to_miss: str = ""
+    discussion_questions: List[str] = Field(default_factory=list)
 
-class ContextualMetadata(BaseModel):
-    expected_scale_qps: Optional[str] = None
-    expected_data_size: Optional[str] = None
-    critical_slos_latency: Optional[str] = None
-    critical_slos_availability: Optional[str] = None
-    known_dependencies: Optional[str] = None
+    class Config:
+        use_enum_values = True
 
-class SecondOpinionReport(BaseModel):
-    overall_risk: ConfidenceLevel
-    primary_concern: Optional[str]
-    why_this_matters: Optional[str] = None
-    summary: str
-    confidence_note: str = "Confidence reflects similarity to known failure patterns, not probability."
-    failure_modes: List[FailurePatternMatch]
-    assumptions: List[Assumption]
-    assumptions_note: str = "These assumptions are inferred from the design and are not validated."
-    ruled_out: List[str]
-    ruled_out_note: str = "Reviewed and deprioritized based on the provided design:"
-    unknowns: List[str] = []  # Known unknowns / not evaluated
-    version_info: Optional[dict] = None  # Pattern/prompt/model versions
-    document_sections: Optional[List[str]] = None  # List of section headings from input document
+
+class AnalysisResult(BaseModel):
+    """Complete analysis result"""
+    failure_modes: List[Finding] = Field(default_factory=list)
+    implicit_assumptions: List[str] = Field(default_factory=list)
+    ruled_out_risks: List[str] = Field(default_factory=list)
+    known_unknowns: List[str] = Field(default_factory=list)
+    summary: str = ""

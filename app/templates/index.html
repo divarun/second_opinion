@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Second Opinion — Pre-mortem Analysis</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400..800&display=swap" rel="stylesheet">
+</head>
+<body>
+<!-- Background Effects -->
+<div class="bg-grid"></div>
+<div class="bg-gradient"></div>
+
+<div class="container">
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="hero-badge">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="3" fill="currentColor"/>
+                <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1"/>
+            </svg>
+            <span>Pre-mortem Analysis Tool</span>
+        </div>
+        <h1 class="hero-title">
+            <span class="title-line">Second</span>
+            <span class="title-line">Opinion</span>
+        </h1>
+        <p class="hero-subtitle">
+            Identify distributed systems failure modes before they ship.<br>
+            Pattern-based analysis powered by LLM intelligence.
+        </p>
+    </header>
+
+    <main>
+        <!-- Input Section -->
+        <section class="input-section">
+            <div class="section-header">
+                <h2>Design Document</h2>
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('paste')" data-tab="paste">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M3 2h10v12H3z" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M5 5h6M5 7h6M5 9h4" stroke="currentColor" stroke-width="1.5"/>
+                        </svg>
+                        Paste Text
+                    </button>
+                    <button class="tab" onclick="switchTab('upload')" data-tab="upload">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 3v8M5 8l3-3 3 3" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M2 11v2h12v-2" stroke="currentColor" stroke-width="1.5"/>
+                        </svg>
+                        Upload File
+                    </button>
+                </div>
+            </div>
+
+            <!-- Paste Text Tab -->
+            <div id="paste-tab" class="tab-content active">
+                <div class="input-card">
+                        <textarea
+                                id="document-text"
+                                placeholder="Paste your RFC, design doc, or architecture proposal here...
+
+Supports: Markdown, plain text, reStructuredText"
+                                rows="16"
+                                spellcheck="false"
+                        ></textarea>
+                </div>
+
+                <div class="context-section">
+                    <div class="context-header">
+                        <h3>Optional Context</h3>
+                        <span class="context-hint">Provide additional context for better analysis</span>
+                    </div>
+                    <div class="context-grid">
+                        <div class="input-group">
+                            <label for="context-scale">Expected Scale</label>
+                            <input
+                                    type="text"
+                                    id="context-scale"
+                                    placeholder="e.g., 10M requests/day, 100k users"
+                            >
+                        </div>
+                        <div class="input-group">
+                            <label for="context-slos">SLOs & Latency</label>
+                            <input
+                                    type="text"
+                                    id="context-slos"
+                                    placeholder="e.g., 99.9% uptime, <100ms p95"
+                            >
+                        </div>
+                        <div class="input-group">
+                            <label for="context-deps">Key Dependencies</label>
+                            <input
+                                    type="text"
+                                    id="context-deps"
+                                    placeholder="e.g., PostgreSQL, Redis, S3"
+                            >
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-primary" onclick="analyzePaste()">
+                    <span class="btn-text">Run Analysis</span>
+                    <svg class="btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Upload File Tab -->
+            <div id="upload-tab" class="tab-content">
+                <div class="file-upload-zone">
+                    <input
+                            type="file"
+                            id="file-input"
+                            accept=".md,.txt,.rst,.adoc"
+                            onchange="handleFileSelect()"
+                    >
+                    <label for="file-input" class="file-label">
+                        <div class="upload-icon">
+                            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                                <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="1.5" opacity="0.2"/>
+                                <path d="M24 14v16M17 23l7-7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M14 34h20" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </div>
+                        <div class="upload-text">
+                            <span id="file-name" class="upload-title">Drop file here or click to browse</span>
+                            <span class="upload-hint">Supports .md, .txt, .rst, .adoc — Max 50KB</span>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="context-section">
+                    <div class="context-header">
+                        <h3>Optional Context</h3>
+                        <span class="context-hint">Provide additional context for better analysis</span>
+                    </div>
+                    <div class="context-grid">
+                        <div class="input-group">
+                            <label for="upload-context-scale">Expected Scale</label>
+                            <input
+                                    type="text"
+                                    id="upload-context-scale"
+                                    placeholder="e.g., 10M requests/day"
+                            >
+                        </div>
+                        <div class="input-group">
+                            <label for="upload-context-slos">SLOs & Latency</label>
+                            <input
+                                    type="text"
+                                    id="upload-context-slos"
+                                    placeholder="e.g., 99.9% uptime"
+                            >
+                        </div>
+                        <div class="input-group">
+                            <label for="upload-context-deps">Key Dependencies</label>
+                            <input
+                                    type="text"
+                                    id="upload-context-deps"
+                                    placeholder="e.g., PostgreSQL, Redis"
+                            >
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-primary" onclick="analyzeUpload()" id="upload-btn" disabled>
+                    <span class="btn-text">Run Analysis</span>
+                    <svg class="btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading-overlay hidden">
+            <div class="loading-card">
+                <div class="loading-spinner">
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                </div>
+                <h3 class="loading-title">Analyzing Document</h3>
+                <p class="loading-text">Pattern matching against 16 failure modes...</p>
+                <div class="loading-progress">
+                    <div class="progress-bar"></div>
+                </div>
+                <span class="loading-time">This typically takes some time</span>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <section id="results" class="results hidden">
+            <div class="results-header">
+                <h2>Analysis Complete</h2>
+                <div class="summary-card" id="summary"></div>
+            </div>
+
+            <!-- Failure Modes (Full Width) -->
+            <div class="failure-modes-section">
+                <div class="section-title">
+                    <div class="title-icon">⚠️</div>
+                    <div>
+                        <h3>Potential Failure Modes</h3>
+                        <p>Ranked by confidence and severity</p>
+                    </div>
+                </div>
+                <div id="failure-modes" class="failure-modes-list"></div>
+            </div>
+
+            <!-- Insights Grid -->
+            <div class="insights-grid">
+                <!-- Implicit Assumptions -->
+                <div class="insight-panel assumptions-panel">
+                    <div class="panel-header">
+                        <div class="panel-icon">💭</div>
+                        <h3>Implicit Assumptions</h3>
+                    </div>
+                    <div class="panel-content">
+                        <ul id="assumptions" class="insight-list"></ul>
+                    </div>
+                </div>
+
+                <!-- Known Unknowns -->
+                <div class="insight-panel unknowns-panel">
+                    <div class="panel-header">
+                        <div class="panel-icon">❓</div>
+                        <h3>Known Unknowns</h3>
+                    </div>
+                    <div class="panel-content">
+                        <ul id="unknowns" class="insight-list"></ul>
+                    </div>
+                </div>
+
+                <!-- Ruled Out Risks -->
+                <div class="insight-panel ruled-out-panel">
+                    <div class="panel-header">
+                        <div class="panel-icon">✅</div>
+                        <h3>Ruled Out Risks</h3>
+                    </div>
+                    <div class="panel-content">
+                        <ul id="ruled-out" class="insight-list"></ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-note">
+                <strong>Important:</strong> This tool assists in design reviews but does not replace human judgment.
+                It surfaces potential failure modes based on known patterns but does not guarantee completeness or correctness.
+            </div>
+            <div class="footer-meta">
+                <span>Powered by Ollama LLM</span>
+                <span>•</span>
+                <span>16 Failure Patterns</span>
+                <span>•</span>
+                <span>Open Source</span>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<script src="/static/script.js"></script>
+</body>
+</html>
