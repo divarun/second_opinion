@@ -1,248 +1,176 @@
-# Second Opinion 
+# Second Opinion
 
-A streamlined pre-mortem review tool that helps engineering teams identify potential failure modes in system design documents. By mapping designs against a curated library of distributed-systems failure archetypes, it surfaces subtle, emergent failure patterns that often only appear under real production load or during partial outages.
+**Second Opinion** is a pre-mortem design review tool for distributed systems.  
+It helps engineering teams identify *non-obvious failure modes* in system design documents — the kind that only show up under real production load, partial outages, or bad days at 3 a.m.
 
+By mapping your design against a curated library of distributed-systems failure archetypes, Second Opinion surfaces subtle, emergent risks that traditional reviews often miss.
 
-This tool grew out of years of running design reviews where the hardest failures weren't the obvious ones.
+This project grew out of years of design reviews where the hardest failures were never the obvious ones.
+
+---
+
+## What It Does
+
+Second Opinion analyzes architecture and design documents and produces a structured resilience review, including:
+
+- Likely failure modes, ranked by confidence
+- Implicit assumptions hidden in the design
+- Critical unknowns or missing information
+- Risks that were considered and ruled out
+
+The goal is not to replace human judgment — it’s to make design reviews sharper, faster, and more complete.
+
+---
 
 ## Features
 
-- 🔍 **16+ Failure Patterns**: Curated distributed systems failure archetypes
-- 🎯 **Confidence Scoring**: High/Medium/Low confidence levels
-- 📊 **Structured Reports**: Clear, actionable analysis
-- 🚀 **Fast Analysis**: Optimized LLM prompts
-- 💻 **Clean UI**: Modern, responsive interface
+- 🔍 **16+ Failure Patterns**  
+  Curated distributed-systems failure archetypes
 
-## Quick Start
+- 🎯 **Confidence Scoring**  
+  High / Medium / Low confidence per finding
 
-### Prerequisites
+- 📊 **Structured Reports**  
+  Clear evidence, triggers, and discussion prompts
 
-- Python 3.8 or higher
-- Ollama installed and running locally
-- An LLM model (recommended: `llama3`, `qwen2.5`, or `granite3`)
+- 🚀 **Fast Analysis**  
+  Optimized prompts for local LLMs via Ollama
 
-### Installation
+- 💻 **Clean UI**  
+  Simple, modern web interface
 
-```bash
-# Clone or download this directory
-cd second_opinion_simplified
+---
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+## How It Works
 
-# Install dependencies
-pip install -r requirements.txt
+1. You paste or upload a system design document
+2. Optionally add context (scale, SLOs, dependencies)
+3. The analyzer evaluates the design against known failure patterns
+4. You receive a structured report highlighting risks and discussion points
 
-# Pull an LLM model (if not already done)
-ollama pull llama3
+The analysis focuses on *emergent behavior*, partial failures, and distributed-system edge cases — not syntax or style.
 
-# Create .env file
-cp .env.example .env
-```
-
-### Configuration
-
-Edit `.env` to customize settings:
-
-```env
-OLLAMA_MODEL=llama3
-OLLAMA_BASE_URL=http://localhost:11434
-MAX_DOCUMENT_SIZE=50000
-CONFIDENCE_THRESHOLD=0.6
-```
-
-### Run the Application
-
-```bash
-# Start the server
-uvicorn app:app --reload
-
-# Or use Python directly
-python app.py
-```
-
-Then open **http://localhost:8000** in your browser.
-
-## Usage
-
-### 1. Paste Text
-- Paste your design document directly into the text area
-- Add optional context (scale, SLOs, dependencies)
-- Click "Analyze Document"
-
-### 2. Upload File
-- Upload a file (.md, .txt, .rst, .adoc)
-- Add optional context
-- Click "Analyze Document"
-
-### 3. Review Results
-The analysis provides a comprehensive breakdown of your system's resilience.
-
-![Second Opinion Report Screenshot](./samples/sample_report.png)
-
-The report includes:
-- **Failure Modes**: Ranked list of potential failures with evidenc
-- **Implicit Assumptions**: Unstated expectations in the design
-- **Known Unknowns**: Missing critical information
-- **Ruled Out Risks**: Patterns that don't apply
-
-Click on any failure mode to see:
-- Evidence from your document
-- Trigger conditions
-- Why it's easy to miss
-- Discussion questions for your team
-
-## Project Structure
-
-```
-second_opinion/
-├── app.py              # Main FastAPI application
-├── analyzer.py         # Core analysis engine
-├── patterns.py         # Failure pattern definitions
-├── llm.py             # Ollama LLM integration
-├── models.py          # Pydantic data models
-├── config.py          # Configuration management
-├── templates/
-│   └── index.html     # Main UI template
-├── static/
-│   ├── style.css      # Styles
-│   └── script.js      # Frontend JavaScript
-├── requirements.txt   # Python dependencies
-└── .env.example       # Example configuration
-
-```
-
-## API Endpoints
-
-### POST `/api/analyze`
-Analyze pasted text.
-
-**Request:**
-```json
-{
-  "document": "Design document text...",
-  "context": {
-    "scale": "10M requests/day",
-    "slos": "99.9% uptime",
-    "dependencies": "PostgreSQL, Redis"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "failure_modes": [...],
-  "implicit_assumptions": [...],
-  "known_unknowns": [...],
-  "ruled_out_risks": [...],
-  "summary": "..."
-}
-```
-
-### POST `/api/upload`
-Upload and analyze a file.
-
-**Form Data:**
-- `file`: Design document file
-- `context_scale`: Optional scale info
-- `context_slos`: Optional SLO info
-- `context_dependencies`: Optional dependencies
-
-### GET `/api/patterns`
-List all available failure patterns.
-
-### GET `/api/health`
-Check service health and Ollama connection.
+---
 
 ## Failure Patterns
 
-The tool analyzes against 16 curated patterns:
+Second Opinion currently evaluates designs against these curated patterns:
 
-**Load Patterns:**
+### Load Patterns
 - Thundering Herd Amplification
 - Load Shedding Blind Spot
 - Retry Storm
-- Hotspot/Hot Shard
+- Hotspot / Hot Shard
 
-**Dependency Patterns:**
+### Dependency Patterns
 - Hidden Synchronous Dependency
 - Degraded but Not Dead
 
-**Data Patterns:**
+### Data Patterns
 - Silent Data Loss
 - Metadata Corruption
 - Poison Message
 - State Machine Explosion
 
-**Timing Patterns:**
+### Timing Patterns
 - Cascading Timeout
 - Clock Skew Issues
 
-**Resource Patterns:**
+### Resource Patterns
 - Resource Exhaustion
 - Unbounded Growth
 
-**Distributed Patterns:**
+### Distributed Patterns
 - Partial Outage Inconsistency
 - Version Skew
 - Coordination Overhead
 
-## Customization
+---
 
-### Add New Patterns
-Edit `patterns.py`:
+## Report Output
 
-```python
-FailurePattern(
-    id="your_pattern_id",
-    name="Your Pattern Name",
-    description="What this pattern detects",
-    category=PatternCategory.LOAD,
-    indicators=["keyword1", "keyword2"],
-    why_easy_to_miss="Explanation"
-)
-```
+Each identified failure mode includes:
 
-### Adjust Analysis
-Edit `analyzer.py` to modify:
-- LLM prompts
-- Confidence thresholds
-- Analysis steps
+- Evidence from the design document
+- Trigger conditions
+- Why the issue is easy to miss
+- Discussion questions for the team
 
-### Change LLM Model
-Update `.env`:
-```env
-OLLAMA_MODEL=qwen2.5:14b
-```
+![Second Opinion Report Screenshot](./samples/sample_report.png)
 
-## Troubleshooting
+---
 
-### "Ollama connection failed"
-- Ensure Ollama is running: `ollama serve`
-- Check the URL in `.env`
-- Verify model is pulled: `ollama list`
+## Project Structure
 
-### Analysis is slow
-- Use a smaller model: `llama3:8b` instead of `llama3:70b`
-- Reduce document size
-- Increase timeout in `.env`
-
-### Out of memory
-- Use a quantized model: `llama3:8b-q4_0`
-- Reduce `MAX_DOCUMENT_SIZE` in `.env`
-
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on:
+second_opinion/
+├── app.py # FastAPI application
+├── analyzer.py # Core analysis engine
+├── patterns.py # Failure pattern definitions
+├── llm.py # Ollama LLM integration
+├── models.py # Pydantic data models
+├── config.py # Configuration management
+├── templates/ # HTML UI
+├── static/ # CSS + JavaScript
+└── tests/ # Basic tests
 
 
 ---
 
-**Note:** Second Opinion assists in design reviews but does not replace human judgment. It surfaces potential failure modes based on known patterns but does not guarantee completeness or correctness.
+## API Overview
+
+- **POST `/api/analyze`**  
+  Analyze pasted text
+
+- **POST `/api/upload`**  
+  Upload and analyze a document file
+
+- **GET `/api/patterns`**  
+  List available failure patterns
+
+- **GET `/api/health`**  
+  Service and Ollama health check
+
+Detailed examples and curl commands are in the Quick Start guide.
+
+---
+
+## Customization
+
+### Add New Failure Patterns
+Edit `patterns.py` to add or tune failure archetypes.
+
+### Adjust Analysis Behavior
+Modify `analyzer.py` to change:
+- Prompts
+- Confidence thresholds
+- Analysis steps
+
+### Change the LLM
+Second Opinion uses local models via Ollama.  
+Model selection is configurable via environment variables.
+
+---
+
+## Getting Started
+
+For installation, configuration, usage examples, and deployment:
+
+👉 **See [Quick Reference Guide](quickstart.md)**
+
+You can be up and running in about five minutes.
+
+---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+**Note:** Second Opinion assists in design reviews but does not guarantee correctness or completen

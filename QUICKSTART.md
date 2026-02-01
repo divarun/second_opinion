@@ -1,181 +1,147 @@
 # Quick Reference Guide
 
-## Installation (5 Minutes)
+This is a command-first guide for getting Second Opinion running quickly.  
+For background, concepts, and failure patterns, see **README.md**.
 
+---
+
+## Installation (≈ 5 Minutes)
+
+### 1. Environment Setup
 ```bash
-# 1. Setup
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# 2. Configure
+2. Configuration
 cp .env.example .env
 # Edit .env if needed
-
-# 3. Ensure Ollama is running
-ollama serve  # In separate terminal
+3. Start Ollama
+ollama serve        # In a separate terminal
 ollama pull llama3
+4. Start the App
+python app.py
+# or
+uvicorn app:app --reload
 
-# 4. Start
-./start.sh  # Linux/Mac
-start.bat   # Windows
-# Or: python app.py
 ```
+Open http://localhost:8000
 
 ## Usage
 
-1. Open http://localhost:8000
-2. Paste document OR upload file
-3. Add context (optional): scale, SLOs, dependencies
-4. Click "Analyze Document"
-5. Review results in ~30-60 seconds
+1. Open the web UI
+2. Paste a document or upload a file.
 
-## API Examples
+(Optional) Add context:
+* scale
+* SLOs
+  *dependencies
 
-### Analyze Text
+3. Click Analyze Document
+4. Review results (~30–60 seconds)
+
+API Examples
+Analyze Text
 ```bash
 curl -X POST http://localhost:8000/api/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "document": "Your design document...",
-    "context": {
-      "scale": "10M req/day",
-      "slos": "99.9% uptime"
-    }
-  }'
+-H "Content-Type: application/json" \
+-d '{
+"document": "Your design document...",
+"context": {
+"scale": "10M req/day",
+"slos": "99.9% uptime"
+}
+}'
+
 ```
 
-### Upload File
+Upload File
 ```bash
 curl -X POST http://localhost:8000/api/upload \
-  -F "file=@design.md" \
-  -F "context_scale=10M req/day"
+-F "file=@design.md" \
+-F "context_scale=10M req/day"
 ```
 
-### List Patterns
+List Patterns
 ```bash
 curl http://localhost:8000/api/patterns
 ```
 
-### Health Check
+Health Check
 ```bash
 curl http://localhost:8000/api/health
 ```
 
-## Configuration
+Configuration
 
-Edit `.env`:
-```env
-# Use different model
+Edit .env:
+```bash
+# Model selection
 OLLAMA_MODEL=qwen2.5:14b
 
-# Increase timeout for large docs
+# Timeouts
 OLLAMA_TIMEOUT=180
 
-# Adjust thresholds
+# Analysis behavior
 CONFIDENCE_THRESHOLD=0.7
+MAX_DOCUMENT_SIZE=50000
 MAX_FAILURE_MODES=15
 ```
 
-## Common Issues
+### Common Issues
+"Ollama connection failed"
+* Ensure Ollama is running: ollama serve
+* Verify URL in .env
+* Confirm model is available: ollama list
 
-### "Ollama connection failed"
-- Start Ollama: `ollama serve`
-- Check URL matches `.env`
-- Verify model: `ollama list`
+Slow analysis
+* Use a smaller model: llama3:8b
+* Reduce document size
+* Increase timeout
 
-### Slow analysis
-- Use smaller model: `llama3:8b`
-- Reduce document size
-- Increase timeout
+Out of memory
 
-### Out of memory
-- Use quantized: `llama3:8b-q4_0`
-- Lower `MAX_DOCUMENT_SIZE`
-
-## File Structure
-
-```
-7 core files + 3 directories:
-├── app.py           - FastAPI app (180 lines)
-├── analyzer.py      - Analysis engine (220 lines)
-├── patterns.py      - Pattern library (230 lines)
-├── llm.py          - Ollama client (100 lines)
-├── models.py       - Data models (80 lines)
-├── config.py       - Settings (30 lines)
-├── templates/      - HTML template
-├── static/         - CSS + JavaScript
-└── tests/          - Basic tests
-```
-
-## Customization
-
-### Add Pattern
-Edit `patterns.py`:
-```python
-FailurePattern(
-    id="my_pattern",
-    name="My Pattern",
-    description="What it detects",
-    category=PatternCategory.LOAD,
-    indicators=["keyword1", "keyword2"],
-    why_easy_to_miss="Why..."
-)
-```
-
-### Modify Analysis
-Edit `analyzer.py`:
-- Change prompts
-- Add analysis steps
-- Adjust scoring
-
-### UI Changes
-- `templates/index.html` - Structure
-- `static/style.css` - Styling
-- `static/script.js` - Behavior
+* Use quantized models: llama3:8b-q4_0
+* Lower MAX_DOCUMENT_SIZE
 
 ## Testing
-
+Install testing tools:
 ```bash
-# Run tests
 pip install pytest pytest-asyncio
+```
+Run tests
+```bash
 pytest test_basic.py -v
+```
 
-# Test with example
+Quick manual test:
+```bash
 python -c "
 import asyncio
 from analyzer import DesignAnalyzer
 
 async def test():
-    analyzer = DesignAnalyzer()
-    with open('example_design.md') as f:
-        doc = f.read()
-    results = await analyzer.analyze(doc)
-    print(results['summary'])
+a = DesignAnalyzer()
+with open('example_design.md') as f:
+doc = f.read()
+r = await a.analyze(doc)
+print(r['summary'])
 
 asyncio.run(test())
 "
 ```
-
 ## Deployment
-
-### Development
+Development
 ```bash
 uvicorn app:app --reload
 ```
-
-### Production
+Production
 ```bash
-# Install production server
 pip install gunicorn
-
-# Run with workers
 gunicorn app:app -w 4 -k uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000
+--bind 0.0.0.0:8000
 ```
-
-### Docker
-```dockerfile
+Docker
+```bash
 FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt .
@@ -184,24 +150,22 @@ COPY . .
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
+### Performance Tips
 
-## Performance Tips
+* Faster models: llama3:8b < qwen2.5 < llama3:70b
+* Parallelism: Multiple workers for concurrent analysis
+* Caching: Add Redis for repeated documents
+* Batching: Analyze multiple docs programmatically
 
-- **Faster models**: `llama3:8b` < `qwen2.5` < `llama3:70b`
-- **Parallel analysis**: Run multiple workers
-- **Caching**: Add Redis for repeated docs
-- **Batch processing**: Analyze multiple docs
+### Security Notes
 
-## Security Notes
+* No authentication by default
+* Input validation on uploads
+* XSS protection in frontend
+* Avoid logging sensitive documents
 
-- No authentication included (add if needed)
-- Input validation on file uploads
-- XSS protection in frontend
-- No sensitive data in logs
+### Support & Debugging
 
-## Support
-
-- Issues: Check logs in terminal
-- Health: http://localhost:8000/api/health
-- Patterns: http://localhost:8000/api/patterns
-- Example: Use `example_design.md`
+* Logs: terminal output
+* Health: http://localhost:8000/api/health
+* Patterns: http://localhost:8000/api/patterns
