@@ -1,10 +1,12 @@
-# Second Opinion - Simplified Version
+# Second Opinion 
 
-A streamlined pre-mortem review tool that helps engineering teams identify potential failure modes in system design documents.
+A streamlined pre-mortem review tool that helps engineering teams identify potential failure modes in system design documents. By mapping designs against a curated library of distributed-systems failure archetypes, it surfaces subtle, emergent failure patterns that often only appear under real production load or during partial outages.
+
+
+This tool grew out of years of running design reviews where the hardest failures weren't the obvious ones.
 
 ## Features
 
-- ✨ **Simplified Architecture**: Single-file modules, minimal dependencies
 - 🔍 **16+ Failure Patterns**: Curated distributed systems failure archetypes
 - 🎯 **Confidence Scoring**: High/Medium/Low confidence levels
 - 📊 **Structured Reports**: Clear, actionable analysis

@@ -60,8 +60,12 @@ git checkout -b fix/your-bug-fix
 #### 5. Test Your Changes
 
 ```bash
-# Run the application
+# Start the server
+uvicorn app:app --reload
+
+# Or use Python directly
 python app.py
+```
 
 # Test with sample documents
 # Verify the UI works correctly
