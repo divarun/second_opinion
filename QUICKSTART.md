@@ -7,165 +7,197 @@ For background, concepts, and failure patterns, see **README.md**.
 
 ## Installation (≈ 5 Minutes)
 
-### 1. Environment Setup
+### 1. Docker (recommended)
+
+```bash
+docker compose up --build
+```
+
+Open 
+
+
+
+(Ollama at http://localhost:11434)
+
+### 2. Local with Ollama
+
 ```bash
 python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
+venv\Scripts\activate      # macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
-2. Configuration
-cp .env.example .env
-# Edit .env if needed
-3. Start Ollama
-ollama serve        # In a separate terminal
+ollama serve &
 ollama pull llama3
-4. Start the App
-python app.py
-# or
-uvicorn app:app --reload
-
+uvicorn app.app:app --reload
 ```
+
 Open http://localhost:8000
+
+### 3. Local with Anthropic Claude
+
+```bash
+python -m venv venv
+venv\Scripts\activate      # macOS/Linux: source venv/bin/activate
+pip install -r requirements.txt
+
+# Set provider and key (or add to .env)
+set LLM_PROVIDER=anthropic                # macOS/Linux: export LLM_PROVIDER=anthropic
+set ANTHROPIC_API_KEY=sk-ant-...
+
+uvicorn app.app:app --reload
+```
+
+Open http://localhost:8000
+
+---
 
 ## Usage
 
 1. Open the web UI
-2. Paste a document or upload a file.
+2. Paste a document or upload a file (.md, .txt, .rst, .adoc, or .pdf)
+3. Optionally add context: scale, SLOs, dependencies
+4. Click **Run Analysis**
+5. Review results — live progress updates appear as each step completes (~30–60 seconds)
+6. Export the report via **Copy as Markdown** or **Download JSON**
 
-(Optional) Add context:
-* scale
-* SLOs
-  *dependencies
+---
 
-3. Click Analyze Document
-4. Review results (~30–60 seconds)
+## API Examples
 
-API Examples
-Analyze Text
+### Analyze Text (streaming)
+
+```bash
+curl -X POST http://localhost:8000/api/analyze/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "document": "Your design document...",
+    "context": {
+      "scale": "10M req/day",
+      "slos": "99.9% uptime"
+    }
+  }'
+```
+
+### Analyze Text (non-streaming)
+
 ```bash
 curl -X POST http://localhost:8000/api/analyze \
--H "Content-Type: application/json" \
--d '{
-"document": "Your design document...",
-"context": {
-"scale": "10M req/day",
-"slos": "99.9% uptime"
-}
-}'
-
+  -H "Content-Type: application/json" \
+  -d '{
+    "document": "Your design document...",
+    "context": {
+      "scale": "10M req/day",
+      "slos": "99.9% uptime"
+    }
+  }'
 ```
 
-Upload File
+### Upload File
+
 ```bash
+# Supports .md, .txt, .rst, .adoc, .pdf
 curl -X POST http://localhost:8000/api/upload \
--F "file=@design.md" \
--F "context_scale=10M req/day"
+  -F "file=@design.md" \
+  -F "context_scale=10M req/day"
 ```
 
-List Patterns
+### List Patterns
+
 ```bash
 curl http://localhost:8000/api/patterns
 ```
 
-Health Check
+### Health Check
+
 ```bash
 curl http://localhost:8000/api/health
 ```
 
-Configuration
+---
 
-Edit .env:
-```bash
-# Model selection
-OLLAMA_MODEL=qwen2.5:14b
+## Configuration
 
-# Timeouts
-OLLAMA_TIMEOUT=180
+Use env vars or a `.env` file in the project root:
 
-# Analysis behavior
-CONFIDENCE_THRESHOLD=0.7
-MAX_DOCUMENT_SIZE=50000
-MAX_FAILURE_MODES=15
-```
+| Variable | Default | Description |
+|---|---|---|
+| `LLM_PROVIDER` | `ollama` | `ollama` or `anthropic` |
+| `OLLAMA_MODEL` | `llama3` | Ollama model name |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Compose: `http://ollama:11434` |
+| `OLLAMA_TIMEOUT` | `120` | Request timeout (seconds) |
+| `ANTHROPIC_API_KEY` | _(empty)_ | Required when using Anthropic |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Anthropic model ID |
+| `CONFIDENCE_THRESHOLD` | `0.6` | Minimum score for a finding |
+| `MAX_DOCUMENT_SIZE` | `50000` | Max input characters |
+| `MAX_FAILURE_MODES` | `10` | Max findings returned |
 
-### Common Issues
-"Ollama connection failed"
-* Ensure Ollama is running: ollama serve
-* Verify URL in .env
-* Confirm model is available: ollama list
+---
 
-Slow analysis
-* Use a smaller model: llama3:8b
-* Reduce document size
-* Increase timeout
+## Common Issues
 
-Out of memory
+### "Ollama connection failed"
+- Ensure Ollama is running: `ollama serve`
+- Verify `OLLAMA_BASE_URL` in `.env`
+- Confirm model is available: `ollama list`
 
-* Use quantized models: llama3:8b-q4_0
-* Lower MAX_DOCUMENT_SIZE
+### Slow analysis
+- Use a smaller model: `OLLAMA_MODEL=llama3:8b`
+- Reduce document size
+- Increase `OLLAMA_TIMEOUT`
+- Switch to Anthropic for faster, more reliable JSON output
 
-## Testing
-Install testing tools:
-```bash
-pip install pytest pytest-asyncio
-```
-Run tests
-```bash
-pytest test_basic.py -v
-```
+### Out of memory (Ollama)
+- Use a quantized model: `OLLAMA_MODEL=llama3:8b-q4_0`
+- Lower `MAX_DOCUMENT_SIZE`
 
-Quick manual test:
-```bash
-python -c "
-import asyncio
-from analyzer import DesignAnalyzer
+### PDF text extraction returns empty
+- The PDF may be image-only or scanned; pypdf cannot extract text from rasterized PDFs
+- Convert to text first using an OCR tool, then paste or upload as `.txt`
 
-async def test():
-a = DesignAnalyzer()
-with open('example_design.md') as f:
-doc = f.read()
-r = await a.analyze(doc)
-print(r['summary'])
+---
 
-asyncio.run(test())
-"
-```
 ## Deployment
-Development
+
+### Development
+
 ```bash
-uvicorn app:app --reload
+uvicorn app.app:app --reload
 ```
-Production
+
+### Production
+
 ```bash
 pip install gunicorn
-gunicorn app:app -w 4 -k uvicorn.workers.UvicornWorker \
---bind 0.0.0.0:8000
+gunicorn app.app:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
-Docker
+
+### Docker
+
 ```bash
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+docker compose up --build
 ```
 
-### Performance Tips
+---
 
-* Faster models: llama3:8b < qwen2.5 < llama3:70b
-* Parallelism: Multiple workers for concurrent analysis
-* Caching: Add Redis for repeated documents
-* Batching: Analyze multiple docs programmatically
+## Performance Tips
 
-### Security Notes
+- Faster local models: `llama3:8b` is much quicker than `llama3:70b` with reasonable quality
+- Anthropic Claude gives the most reliable structured JSON output
+- Multiple gunicorn workers handle concurrent analyses without blocking
+- Reduce `MAX_FAILURE_MODES` to shorten analysis time
 
-* No authentication by default
-* Input validation on uploads
-* XSS protection in frontend
-* Avoid logging sensitive documents
+---
 
-### Support & Debugging
+## Security Notes
 
-* Logs: terminal output
-* Health: http://localhost:8000/api/health
-* Patterns: http://localhost:8000/api/patterns
+- No authentication by default — add a reverse proxy (nginx, Caddy) with auth for shared deployments
+- Input validation on file uploads
+- XSS protection in frontend (all user content is escaped before rendering)
+- Avoid logging document contents in production
+
+---
+
+## Support & Debugging
+
+- Logs: terminal output from uvicorn/gunicorn
+- Health endpoint: http://localhost:8000/api/health
+- Pattern list: http://localhost:8000/api/patterns

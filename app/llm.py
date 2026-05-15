@@ -1,94 +1,39 @@
 """
 LLM Integration
-Simplified interface to Ollama for document analysis
+Multi-provider LLM client supporting Ollama and Anthropic
 """
-import httpx
 import json
+from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
-from config import settings
+
+import httpx
+
+from app.config import settings
 
 
-class LLMClient:
-    """Client for interacting with Ollama LLM"""
+class BaseLLMClient(ABC):
+    """Common interface for all LLM providers"""
 
-    def __init__(self):
-        self.base_url = settings.ollama_base_url
-        self.model = settings.ollama_model
-        self.timeout = settings.ollama_timeout
-        self.client = httpx.AsyncClient(timeout=self.timeout)
-
-    async def generate(
-            self,
-            prompt: str,
-            system_prompt: Optional[str] = None,
-            temperature: float = 0.3,
-            max_tokens: int = 4000
-    ) -> str:
-        """
-        Generate text completion from prompt
-
-        Args:
-            prompt: User prompt
-            system_prompt: Optional system instructions
-            temperature: Randomness (0.0 = deterministic, 1.0 = creative)
-            max_tokens: Maximum response length
-
-        Returns:
-            Generated text response
-        """
-        url = f"{self.base_url}/api/generate"
-
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": temperature,
-                "num_predict": max_tokens
-            }
-        }
-
-        if system_prompt:
-            payload["system"] = system_prompt
-
-        try:
-            response = await self.client.post(url, json=payload)
-            response.raise_for_status()
-            result = response.json()
-            return result.get("response", "")
-
-        except httpx.HTTPStatusError as e:
-            raise Exception(f"Ollama API error: {e.response.status_code} - {e.response.text}")
-        except Exception as e:
-            raise Exception(f"Failed to generate completion: {str(e)}")
-
+    @abstractmethod
     async def generate_json(
-            self,
-            prompt: str,
-            system_prompt: Optional[str] = None,
-            temperature: float = 0.3
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.3,
     ) -> Dict[Any, Any]:
-        """
-        Generate structured JSON response
+        pass
 
-        Args:
-            prompt: User prompt
-            system_prompt: Optional system instructions
-            temperature: Randomness level
+    @abstractmethod
+    async def check_health(self) -> bool:
+        pass
 
-        Returns:
-            Parsed JSON dictionary
-        """
-        # Enhance system prompt for JSON output
-        json_system = (system_prompt or "") + "\n\nYou must respond with valid JSON only. No markdown, no explanation."
+    @abstractmethod
+    async def close(self):
+        pass
 
-        response = await self.generate(
-            prompt=prompt,
-            system_prompt=json_system,
-            temperature=temperature
-        )
-
-        # Clean response (remove markdown code blocks if present)
+    @staticmethod
+    def _extract_json(response: str) -> Dict:
+        """Strip markdown fences and parse JSON."""
         cleaned = response.strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
@@ -97,24 +42,102 @@ class LLMClient:
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3]
         cleaned = cleaned.strip()
-
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError as e:
             raise Exception(f"Failed to parse JSON response: {str(e)}\nResponse: {response}")
 
+
+class OllamaClient(BaseLLMClient):
+    """Client for Ollama local LLM service"""
+
+    def __init__(self):
+        self.base_url = settings.ollama_base_url
+        self.model = settings.ollama_model
+        self.client = httpx.AsyncClient(timeout=settings.ollama_timeout)
+
+    async def generate_json(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.3,
+    ) -> Dict[Any, Any]:
+        json_system = (system_prompt or "") + "\n\nYou must respond with valid JSON only. No markdown, no explanation."
+
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": temperature, "num_predict": 4000},
+        }
+        if json_system:
+            payload["system"] = json_system
+
+        try:
+            response = await self.client.post(f"{self.base_url}/api/generate", json=payload)
+            response.raise_for_status()
+            raw = response.json().get("response", "")
+            return self._extract_json(raw)
+        except httpx.HTTPStatusError as e:
+            raise Exception(f"Ollama API error: {e.response.status_code} - {e.response.text}")
+        except Exception as e:
+            raise Exception(f"Ollama generation failed: {str(e)}")
+
     async def check_health(self) -> bool:
-        """Check if Ollama service is available"""
         try:
             response = await self.client.get(f"{self.base_url}/api/tags")
             return response.status_code == 200
-        except:
+        except Exception:
             return False
 
     async def close(self):
-        """Close HTTP client"""
         await self.client.aclose()
 
 
-# Global LLM client instance
-llm_client = LLMClient()
+class AnthropicLLMClient(BaseLLMClient):
+    """Client for Anthropic Claude API"""
+
+    def __init__(self):
+        try:
+            import anthropic
+        except ImportError:
+            raise RuntimeError("anthropic package is required for the Anthropic provider. Run: pip install anthropic")
+
+        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self.model = settings.anthropic_model
+
+    async def generate_json(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.3,
+    ) -> Dict[Any, Any]:
+        json_system = (system_prompt or "") + "\n\nYou must respond with valid JSON only. No markdown, no explanation."
+
+        try:
+            message = await self.client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                temperature=temperature,
+                system=json_system,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = message.content[0].text
+            return self._extract_json(raw)
+        except Exception as e:
+            raise Exception(f"Anthropic generation failed: {str(e)}")
+
+    async def check_health(self) -> bool:
+        return bool(settings.anthropic_api_key)
+
+    async def close(self):
+        await self.client.close()
+
+
+def get_llm_client() -> BaseLLMClient:
+    if settings.llm_provider == "anthropic":
+        return AnthropicLLMClient()
+    return OllamaClient()
+
+
+llm_client = get_llm_client()

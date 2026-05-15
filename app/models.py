@@ -52,10 +52,3 @@ class Finding(BaseModel):
         use_enum_values = True
 
 
-class AnalysisResult(BaseModel):
-    """Complete analysis result"""
-    failure_modes: List[Finding] = Field(default_factory=list)
-    implicit_assumptions: List[str] = Field(default_factory=list)
-    ruled_out_risks: List[str] = Field(default_factory=list)
-    known_unknowns: List[str] = Field(default_factory=list)
-    summary: str = ""

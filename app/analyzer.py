@@ -2,12 +2,16 @@
 Design Analyzer
 Core analysis engine for detecting failure patterns in design documents
 """
-from typing import Dict, List, Optional
-import re
-from models import Finding, AnalysisResult, ConfidenceLevel
-from patterns import get_all_patterns
-from llm import llm_client
-from config import settings
+import asyncio
+import difflib
+from typing import Awaitable, Callable, Dict, List, Optional
+
+from app.config import settings
+from app.llm import llm_client
+from app.models import ConfidenceLevel, Finding
+from app.patterns import get_all_patterns
+
+ProgressCallback = Callable[[str, Optional[dict]], Awaitable[None]]
 
 
 class DesignAnalyzer:
@@ -16,52 +20,65 @@ class DesignAnalyzer:
     def __init__(self):
         self.patterns = get_all_patterns()
         self.llm = llm_client
+        self._pattern_names = [p.name for p in self.patterns]
 
-    async def analyze(self, document: str, context: Optional[Dict] = None) -> Dict:
-        """
-        Analyze design document for failure patterns
-
-        Args:
-            document: Design document text
-            context: Optional context (scale, SLOs, dependencies)
-
-        Returns:
-            Dictionary containing analysis results
-        """
+    async def analyze(
+        self,
+        document: str,
+        context: Optional[Dict] = None,
+        on_progress: Optional[ProgressCallback] = None,
+    ) -> Dict:
         if len(document) > settings.max_document_size:
             raise ValueError(f"Document too large. Max size: {settings.max_document_size} characters")
 
         context = context or {}
 
-        # Step 1: Pattern matching
-        findings = await self._match_patterns(document, context)
+        async def progress(step: str, data: Optional[dict] = None):
+            if on_progress:
+                await on_progress(step, data)
 
-        # Step 2: Extract implicit assumptions
-        assumptions = await self._extract_assumptions(document, context)
+        await progress("start")
 
-        # Step 3: Identify ruled-out risks
+        # Round 1: pattern matching, assumptions, and unknowns run in parallel
+        findings, assumptions, unknowns = await asyncio.gather(
+            self._match_patterns(document, context),
+            self._extract_assumptions(document, context),
+            self._find_known_unknowns(document, context),
+        )
+
+        await progress("patterns_done", {"count": len(findings)})
+
+        # Round 2: ruled-out depends on findings from round 1
         ruled_out = await self._identify_ruled_out_risks(document, findings)
 
-        # Step 4: Find known unknowns
-        unknowns = await self._find_known_unknowns(document, context)
+        await progress("analysis_done")
 
-        # Step 5: Generate summary
-        summary = await self._generate_summary(findings, assumptions)
+        summary = self._generate_summary(findings, assumptions)
+
+        await progress("complete")
 
         return {
             "failure_modes": [self._finding_to_dict(f) for f in findings],
             "implicit_assumptions": assumptions,
             "ruled_out_risks": ruled_out,
             "known_unknowns": unknowns,
-            "summary": summary
+            "summary": summary,
         }
+
+    def _resolve_pattern(self, name: str):
+        """Find the best matching pattern — exact first, then fuzzy fallback."""
+        pattern = next((p for p in self.patterns if p.name.lower() == name.lower()), None)
+        if pattern:
+            return pattern
+        close = difflib.get_close_matches(name, self._pattern_names, n=1, cutoff=0.6)
+        if close:
+            return next((p for p in self.patterns if p.name == close[0]), None)
+        return None
 
     async def _match_patterns(self, document: str, context: Dict) -> List[Finding]:
         """Match document against failure patterns"""
-
-        # Build analysis prompt
         pattern_descriptions = "\n".join([
-            f"{i+1}. {p.name}: {p.description}"
+            f"{i+1}. {p.name}: {p.description}\n   Key signals: {', '.join(p.indicators)}"
             for i, p in enumerate(self.patterns)
         ])
 
@@ -109,16 +126,11 @@ Only include patterns with clear evidence. Return empty matches array if no patt
             result = await self.llm.generate_json(prompt, system_prompt)
             matches = result.get("matches", [])
 
-            # Convert to Finding objects
             findings = []
-            for match in matches[:settings.max_failure_modes]:
-                # Find matching pattern
-                pattern = next(
-                    (p for p in self.patterns if p.name.lower() == match["pattern_name"].lower()),
-                    None
-                )
+            for match in matches[: settings.max_failure_modes]:
+                pattern = self._resolve_pattern(match.get("pattern_name", ""))
 
-                if pattern and match["match_score"] >= settings.confidence_threshold:
+                if pattern and match.get("match_score", 0) >= settings.confidence_threshold:
                     finding = Finding(
                         pattern_id=pattern.id,
                         pattern_name=pattern.name,
@@ -127,16 +139,14 @@ Only include patterns with clear evidence. Return empty matches array if no patt
                         evidence=match.get("evidence", []),
                         trigger_conditions=match.get("trigger_conditions", []),
                         why_easy_to_miss=match.get("why_easy_to_miss", pattern.why_easy_to_miss),
-                        discussion_questions=match.get("discussion_questions", [])
+                        discussion_questions=match.get("discussion_questions", []),
                     )
                     findings.append(finding)
 
-            # Sort by confidence and score
-            findings.sort(key=lambda f: (
-                {"high": 3, "medium": 2, "low": 1}[f.confidence],
-                f.match_score
-            ), reverse=True)
-
+            findings.sort(
+                key=lambda f: ({"high": 3, "medium": 2, "low": 1}[f.confidence], f.match_score),
+                reverse=True,
+            )
             return findings
 
         except Exception as e:
@@ -145,7 +155,6 @@ Only include patterns with clear evidence. Return empty matches array if no patt
 
     async def _extract_assumptions(self, document: str, context: Dict) -> List[str]:
         """Extract implicit assumptions from document"""
-
         prompt = f"""Analyze this design document and identify implicit assumptions.
 Look for unstated expectations about:
 - System behavior under load
@@ -164,15 +173,14 @@ Respond as JSON: {{"assumptions": ["assumption 1", "assumption 2", ...]}}"""
         try:
             result = await self.llm.generate_json(prompt)
             return result.get("assumptions", [])[:5]
-        except:
+        except Exception as e:
+            print(f"Assumption extraction error: {e}")
             return []
 
     async def _identify_ruled_out_risks(self, document: str, findings: List[Finding]) -> List[str]:
         """Identify risks that are explicitly ruled out"""
-
-        found_patterns = [f.pattern_name for f in findings]
-        all_patterns = [p.name for p in self.patterns]
-        not_found = [p for p in all_patterns if p not in found_patterns]
+        found_patterns = {f.pattern_name for f in findings}
+        not_found = [p.name for p in self.patterns if p.name not in found_patterns]
 
         if not not_found:
             return []
@@ -191,12 +199,12 @@ Respond as JSON: {{"ruled_out": ["pattern 1", "pattern 2", ...]}}"""
         try:
             result = await self.llm.generate_json(prompt)
             return result.get("ruled_out", [])[:5]
-        except:
+        except Exception as e:
+            print(f"Ruled-out risks error: {e}")
             return []
 
     async def _find_known_unknowns(self, document: str, context: Dict) -> List[str]:
         """Identify areas where critical information is missing"""
-
         prompt = f"""Identify critical information gaps in this design document.
 Look for:
 - Missing performance requirements
@@ -214,12 +222,12 @@ Respond as JSON: {{"unknowns": ["unknown 1", "unknown 2", ...]}}"""
         try:
             result = await self.llm.generate_json(prompt)
             return result.get("unknowns", [])[:5]
-        except:
+        except Exception as e:
+            print(f"Known unknowns error: {e}")
             return []
 
-    async def _generate_summary(self, findings: List[Finding], assumptions: List[str]) -> str:
+    def _generate_summary(self, findings: List[Finding], assumptions: List[str]) -> str:
         """Generate executive summary"""
-
         if not findings and not assumptions:
             return "No significant failure patterns or concerning assumptions identified. Consider running analysis again with more context."
 
@@ -230,14 +238,13 @@ Respond as JSON: {{"unknowns": ["unknown 1", "unknown 2", ...]}}"""
 
         if high_confidence:
             summary_parts.append(
-                f"Found {len(high_confidence)} high-confidence failure pattern(s): {', '.join(f.pattern_name for f in high_confidence[:3])}."
+                f"Found {len(high_confidence)} high-confidence failure pattern(s): "
+                f"{', '.join(f.pattern_name for f in high_confidence[:3])}."
             )
-
         if medium_confidence:
             summary_parts.append(
                 f"Identified {len(medium_confidence)} medium-confidence concern(s) worth reviewing."
             )
-
         if assumptions:
             summary_parts.append(
                 f"Detected {len(assumptions)} implicit assumption(s) that should be validated."
@@ -255,7 +262,7 @@ Respond as JSON: {{"unknowns": ["unknown 1", "unknown 2", ...]}}"""
             "evidence": finding.evidence,
             "trigger_conditions": finding.trigger_conditions,
             "why_easy_to_miss": finding.why_easy_to_miss,
-            "discussion_questions": finding.discussion_questions
+            "discussion_questions": finding.discussion_questions,
         }
 
     async def check_llm_health(self) -> bool:

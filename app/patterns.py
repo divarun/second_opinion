@@ -2,7 +2,7 @@
 Failure Patterns Library
 Curated collection of distributed systems failure patterns
 """
-from models import FailurePattern, PatternCategory
+from app.models import FailurePattern, PatternCategory
 
 
 # Define all failure patterns
@@ -277,7 +277,137 @@ PATTERNS = [
             "state validation"
         ],
         why_easy_to_miss="Happy path state transitions are tested; edge case combinations are not"
-    )
+    ),
+
+    FailurePattern(
+        id="single_point_of_failure",
+        name="Single Point of Failure",
+        description="A critical component with no redundancy whose failure causes total system outage",
+        category=PatternCategory.DEPENDENCY,
+        indicators=[
+            "single node",
+            "no replica",
+            "no failover",
+            "standalone",
+            "primary only",
+            "no redundancy",
+            "single instance",
+            "no backup"
+        ],
+        why_easy_to_miss="HA is often deferred as a 'phase 2' concern and never revisited; the SPOF is invisible until it fails in production"
+    ),
+
+    FailurePattern(
+        id="fanout_amplification",
+        name="Fan-out Amplification",
+        description="A single request triggering O(n) downstream requests, causing load amplification",
+        category=PatternCategory.LOAD,
+        indicators=[
+            "for each user",
+            "notify all",
+            "broadcast",
+            "fan out",
+            "scatter gather",
+            "per subscriber",
+            "expand to all",
+            "iterate over all",
+            "send to followers"
+        ],
+        why_easy_to_miss="The multiplication factor is hidden behind a loop; trivial at small scale but catastrophic as data grows"
+    ),
+
+    FailurePattern(
+        id="dual_write_inconsistency",
+        name="Dual Write Inconsistency",
+        description="Writing to two stores without atomicity causes permanent divergence on partial failure",
+        category=PatternCategory.DATA,
+        indicators=[
+            "write to cache",
+            "update index",
+            "invalidate cache after",
+            "publish event after write",
+            "sync to secondary",
+            "write-through",
+            "update search index",
+            "two stores",
+            "also write to"
+        ],
+        why_easy_to_miss="Each individual write looks safe; the failure window between the two writes is tiny but causes silent, permanent divergence"
+    ),
+
+    FailurePattern(
+        id="missing_idempotency",
+        name="Missing Idempotency",
+        description="Operations added for retry resilience that are not safe to replay, causing duplicate side effects",
+        category=PatternCategory.DATA,
+        indicators=[
+            "retry on failure",
+            "at-least-once",
+            "requeue on error",
+            "idempotency key",
+            "duplicate detection",
+            "process again",
+            "re-deliver",
+            "compensating transaction"
+        ],
+        why_easy_to_miss="Retries are added for reliability without verifying the operation is safe to repeat; duplicate charges or sends only surface in edge cases"
+    ),
+
+    FailurePattern(
+        id="noisy_neighbor",
+        name="Noisy Neighbor",
+        description="One tenant or service consuming disproportionate shared resources, starving others",
+        category=PatternCategory.RESOURCE,
+        indicators=[
+            "shared database",
+            "multi-tenant",
+            "same cluster",
+            "shared cache",
+            "common infrastructure",
+            "shared pool",
+            "single namespace",
+            "shared table",
+            "co-located"
+        ],
+        why_easy_to_miss="Tenants behave uniformly in testing; one aggressive tenant or workload only emerges in production under real usage patterns"
+    ),
+
+    FailurePattern(
+        id="bulkhead_absence",
+        name="Bulkhead Absence",
+        description="No failure isolation between subsystems; a slow dependency consumes shared resources and takes down unrelated functionality",
+        category=PatternCategory.DEPENDENCY,
+        indicators=[
+            "shared thread pool",
+            "shared connection pool",
+            "same executor",
+            "no isolation",
+            "common worker pool",
+            "blocking call",
+            "shared request queue",
+            "no bulkhead"
+        ],
+        why_easy_to_miss="Each subsystem tests fine in isolation; cross-contamination only appears when one dependency degrades under production load"
+    ),
+
+    FailurePattern(
+        id="event_ordering_assumption",
+        name="Event Ordering Assumption",
+        description="System assumes events arrive in order but does not enforce it; out-of-order delivery causes incorrect state",
+        category=PatternCategory.DISTRIBUTED,
+        indicators=[
+            "event stream",
+            "message ordering",
+            "consumer offset",
+            "event replay",
+            "at-least-once delivery",
+            "partition rebalance",
+            "sequence number",
+            "ordered processing",
+            "changelog"
+        ],
+        why_easy_to_miss="Ordered delivery is the common case in testing; out-of-order events only appear during partition rebalancing, consumer restarts, or multi-partition reads"
+    ),
 ]
 
 

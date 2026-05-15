@@ -19,7 +19,7 @@ If you find a bug or have a feature request:
    - Clear title and description
    - Steps to reproduce (for bugs)
    - Expected vs. actual behavior
-   - Environment details (OS, Python version, Ollama model)
+   - Environment details (OS, Python version, LLM provider and model)
 
 ### Contributing Code
 
@@ -34,11 +34,8 @@ cd second_opinion
 #### 2. Set Up Development Environment
 
 ```bash
-# Create virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
@@ -53,24 +50,19 @@ git checkout -b fix/your-bug-fix
 #### 4. Make Changes
 
 - Follow existing code style and patterns
-- Add comments for complex logic
 - Update documentation if needed
 - Test your changes locally
 
-#### 5. Test Your Changes
+#### 5. Start the Server and Test
 
 ```bash
-# Start the server
-uvicorn app:app --reload
-
-# Or use Python directly
-python app.py
+uvicorn app.app:app --reload
 ```
 
-# Test with sample documents
-# Verify the UI works correctly
-# Check that error handling is appropriate
-```
+Then open http://localhost:8000, paste a sample design document, and verify:
+- Analysis runs to completion
+- Results display correctly
+- Error handling works for invalid inputs
 
 #### 6. Commit Your Changes
 
@@ -83,7 +75,6 @@ git commit -m "Description of your changes"
 - Use clear, descriptive messages
 - Start with a verb (Add, Fix, Update, Remove, etc.)
 - Keep the first line under 72 characters
-- Add more details in the body if needed
 
 Examples:
 - `Add support for .docx file uploads`
@@ -101,6 +92,8 @@ Then create a Pull Request on GitHub with:
 - Reference any related issues
 - Describe what changed and why
 
+---
+
 ## Development Guidelines
 
 ### Code Style
@@ -108,96 +101,97 @@ Then create a Pull Request on GitHub with:
 - Follow PEP 8 Python style guide
 - Use meaningful variable and function names
 - Keep functions focused and small
-- Add docstrings for public functions and classes
 
 ### Project Structure
 
-- **`app/`**: Main application code
-  - `api.py`: FastAPI routes
-  - `prompts.py`: Centralized prompt library
-  - `matcher.py`: Pattern matching logic
-  - `models.py`: Pydantic data models
-  - `static/`: UI templates and styles
-- **`data/`**: Data files (failure patterns JSON)
+- **`app/app.py`** — FastAPI routes and application entrypoint
+- **`app/analyzer.py`** — Core analysis engine; prompts and LLM calls live here
+- **`app/patterns.py`** — Failure pattern definitions (the curated pattern library)
+- **`app/llm.py`** — Multi-provider LLM client (`OllamaClient`, `AnthropicLLMClient`)
+- **`app/models.py`** — Pydantic data models (`FailurePattern`, `Finding`, etc.)
+- **`app/config.py`** — Settings loaded from environment variables
+- **`app/templates/`** — Jinja2 HTML templates
+- **`app/static/`** — CSS and JavaScript
 
 ### Adding New Failure Patterns
 
-1. Edit `data/failure_patterns.json`
-2. Follow the existing pattern structure:
-   ```json
-   {
-     "id": "unique_pattern_id",
-     "name": "Pattern Name",
-     "signals": ["keyword1", "keyword2"],
-     "trigger_conditions": ["condition1", "condition2"],
-     "why_subtle": ["reason1", "reason2"],
-     "impact_surface": ["impact1", "impact2"],
-     "discussion_questions": ["question1", "question2"],
-     "required_context": ["context1", "context2"],
-     "safety_signals": ["mitigation1", "mitigation2"]
-   }
+1. Open `app/patterns.py`
+2. Add a new `FailurePattern` to the `PATTERNS` list following this structure:
+
+   ```python
+   FailurePattern(
+       id="unique_snake_case_id",
+       name="Human Readable Pattern Name",
+       description="One-sentence description of the failure mode",
+       category=PatternCategory.LOAD,  # LOAD | DEPENDENCY | DATA | TIMING | RESOURCE | DISTRIBUTED
+       indicators=[
+           "keyword or phrase that signals this pattern",
+           "another signal term",
+       ],
+       why_easy_to_miss="Why engineers typically overlook this in design reviews"
+   )
    ```
-3. Test the pattern with sample documents
-4. Update documentation if needed
 
-### Modifying Prompts
+3. Test the pattern by running the app and submitting a document that should trigger it
+4. Update `README.md` if you're adding to the pattern list
 
-- All prompts are in `app/prompts.py`
-- Follow the existing prompt structure
-- Test with various document types
-- Ensure prompts maintain the conservative, non-prescriptive tone
+### Modifying Analysis Behavior
+
+Prompts, LLM call logic, and the analysis pipeline are all in `app/analyzer.py`. Key methods:
+
+- `_match_patterns()` — main pattern detection prompt
+- `_extract_assumptions()` — implicit assumption extraction
+- `_find_known_unknowns()` — information gap detection
+- `_identify_ruled_out_risks()` — ruled-out risk detection
+- `_generate_summary()` — executive summary generation (no LLM call)
+
+### Adding a New LLM Provider
+
+1. Add a new class in `app/llm.py` that inherits from `BaseLLMClient`
+2. Implement `generate_json()`, `check_health()`, and `close()`
+3. Add the provider to `get_llm_client()` and document the required env vars in `app/config.py`
 
 ### UI Changes
 
-- HTML templates: `app/templates/index.html`
+- HTML template: `app/templates/index.html`
 - CSS styles: `app/static/styles.css`
-- JS: `app/static/script.js`
+- JavaScript: `app/static/script.js`
 - Keep the UI clean and accessible
 - Test on different screen sizes
 
-### Testing
-
-Before submitting:
-- Test with different document types (Markdown, plain text)
-- Test file uploads
-- Test with various failure patterns
-- Verify error handling works correctly
-- Check that the UI displays correctly
+---
 
 ## Areas for Contribution
 
 ### High Priority
 
-- **New Failure Patterns**: Add more distributed-systems failure archetypes
-- **Pattern Matching Improvements**: Enhance signal detection and scoring
-- **UI/UX Enhancements**: Improve report readability and navigation
-- **Error Handling**: Better error messages and recovery
+- **New Failure Patterns** — More distributed-systems failure archetypes
+- **Pattern Matching Improvements** — Better signal detection and scoring
+- **UI/UX Enhancements** — Improve report readability and navigation
+- **Error Handling** — Better error messages and recovery
 
 ### Medium Priority
 
-- **Documentation**: Improve README, add examples, create tutorials
-- **Testing**: Add unit tests, integration tests
-- **Performance**: Optimize pattern matching for large documents
-- **Accessibility**: Improve keyboard navigation, screen reader support
+- **Testing** — Unit tests and integration tests
+- **Documentation** — Examples, tutorials, sample documents
+- **Accessibility** — Keyboard navigation, screen reader support
+- **Performance** — Optimize for large documents
 
 ### Nice to Have
 
-- **Export Features**: Export reports as PDF, Markdown, or JSON
-- **History**: Save and view previous analyses
-- **Pattern Suggestions**: Suggest patterns based on document content
-- **Multi-language Support**: Support for non-English documents
+- **History** — Save and revisit previous analyses
+- **Multi-language Support** — Analysis for non-English documents
+- **`.docx` Upload** — Support Word documents via python-docx
+- **OCR for Scanned PDFs** — Extract text from image-only PDFs
+
+---
 
 ## Questions?
 
-If you have questions about contributing:
 - Open an issue with the `question` label
 - Check existing issues and discussions
 - Review the codebase to understand patterns
 
-## License
-
-By contributing, you agree that your contributions will be licensed under the MIT License.
-
 ---
 
-Thank you for contributing to Second Opinion! 🎉
+Thank you for contributing to Second Opinion!

@@ -117,7 +117,7 @@ Supports: Markdown, plain text, reStructuredText"
                     <input
                             type="file"
                             id="file-input"
-                            accept=".md,.txt,.rst,.adoc"
+                            accept=".md,.txt,.rst,.adoc,.pdf"
                             onchange="handleFileSelect()"
                     >
                     <label for="file-input" class="file-label">
@@ -130,7 +130,7 @@ Supports: Markdown, plain text, reStructuredText"
                         </div>
                         <div class="upload-text">
                             <span id="file-name" class="upload-title">Drop file here or click to browse</span>
-                            <span class="upload-hint">Supports .md, .txt, .rst, .adoc — Max 50KB</span>
+                            <span class="upload-hint">Supports .md, .txt, .rst, .adoc, .pdf — Max 50KB</span>
                         </div>
                     </label>
                 </div>
@@ -186,18 +186,39 @@ Supports: Markdown, plain text, reStructuredText"
                     <div class="spinner-ring"></div>
                 </div>
                 <h3 class="loading-title">Analyzing Document</h3>
-                <p class="loading-text">Pattern matching against 16 failure modes...</p>
+                <p id="loading-text" class="loading-text">Connecting to analysis engine...</p>
                 <div class="loading-progress">
-                    <div class="progress-bar"></div>
+                    <div id="progress-bar" class="progress-bar"></div>
                 </div>
-                <span class="loading-time">This typically takes some time</span>
+                <div class="loading-steps">
+                    <span id="loading-step-label" class="loading-step-label"></span>
+                </div>
+                <span class="loading-time">This typically takes 30–60 seconds</span>
             </div>
         </div>
 
         <!-- Results Section -->
         <section id="results" class="results hidden">
             <div class="results-header">
-                <h2>Analysis Complete</h2>
+                <div class="results-title-row">
+                    <h2>Analysis Complete</h2>
+                    <div class="export-actions">
+                        <button class="btn-export" id="btn-copy-md" onclick="copyMarkdown()">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                <rect x="5" y="5" width="9" height="10" rx="1" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M3 11V2h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                            Copy as Markdown
+                        </button>
+                        <button class="btn-export" onclick="downloadJSON()">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                <path d="M8 3v8M5 8l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                <path d="M2 13h12" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                            Download JSON
+                        </button>
+                    </div>
+                </div>
                 <div class="summary-card" id="summary"></div>
             </div>
 
@@ -258,9 +279,9 @@ Supports: Markdown, plain text, reStructuredText"
                 It surfaces potential failure modes based on known patterns but does not guarantee completeness or correctness.
             </div>
             <div class="footer-meta">
-                <span>Powered by Ollama LLM</span>
+                <span>Powered by LLM</span>
                 <span>•</span>
-                <span>16 Failure Patterns</span>
+                <span>24 Failure Patterns</span>
                 <span>•</span>
                 <span>Open Source</span>
             </div>

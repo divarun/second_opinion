@@ -18,13 +18,13 @@ Second Opinion analyzes architecture and design documents and produces a structu
 - Critical unknowns or missing information
 - Risks that were considered and ruled out
 
-The goal is not to replace human judgment — it’s to make design reviews sharper, faster, and more complete.
+The goal is not to replace human judgment — it's to make design reviews sharper, faster, and more complete.
 
 ---
 
 ## Features
 
-- 🔍 **16+ Failure Patterns**  
+- 🔍 **24 Failure Patterns**  
   Curated distributed-systems failure archetypes
 
 - 🎯 **Confidence Scoring**  
@@ -33,8 +33,20 @@ The goal is not to replace human judgment — it’s to make design reviews shar
 - 📊 **Structured Reports**  
   Clear evidence, triggers, and discussion prompts
 
-- 🚀 **Fast Analysis**  
-  Optimized prompts for local LLMs via Ollama
+- ⚡ **Parallel Analysis**  
+  Pattern matching, assumption extraction, and unknown identification run concurrently
+
+- 📡 **Live Progress**  
+  Server-Sent Events stream progress updates to the UI as each step completes
+
+- 📄 **PDF Support**  
+  Upload design docs as PDF, Markdown, plain text, RST, or AsciiDoc
+
+- 💾 **Export Results**  
+  Copy the full report as Markdown or download as JSON
+
+- 🔌 **Multi-provider LLM**  
+  Use local models via Ollama or Claude via the Anthropic API
 
 - 💻 **Clean UI**  
   Simple, modern web interface
@@ -54,23 +66,28 @@ The analysis focuses on *emergent behavior*, partial failures, and distributed-s
 
 ## Failure Patterns
 
-Second Opinion currently evaluates designs against these curated patterns:
+Second Opinion evaluates designs against these 24 curated patterns:
 
 ### Load Patterns
 - Thundering Herd Amplification
 - Load Shedding Blind Spot
 - Retry Storm
 - Hotspot / Hot Shard
+- Fan-out Amplification
 
 ### Dependency Patterns
 - Hidden Synchronous Dependency
 - Degraded but Not Dead
+- Single Point of Failure
+- Bulkhead Absence
 
 ### Data Patterns
 - Silent Data Loss
 - Metadata Corruption
 - Poison Message
 - State Machine Explosion
+- Dual Write Inconsistency
+- Missing Idempotency
 
 ### Timing Patterns
 - Cascading Timeout
@@ -79,11 +96,13 @@ Second Opinion currently evaluates designs against these curated patterns:
 ### Resource Patterns
 - Resource Exhaustion
 - Unbounded Growth
+- Noisy Neighbor
 
 ### Distributed Patterns
 - Partial Outage Inconsistency
 - Version Skew
 - Coordination Overhead
+- Event Ordering Assumption
 
 ---
 
@@ -102,42 +121,68 @@ Each identified failure mode includes:
 
 ## Project Structure
 
+```
 second_opinion/
-├── app.py # FastAPI application
-├── analyzer.py # Core analysis engine
-├── patterns.py # Failure pattern definitions
-├── llm.py # Ollama LLM integration
-├── models.py # Pydantic data models
-├── config.py # Configuration management
-├── templates/ # HTML UI
-├── static/ # CSS + JavaScript
-└── tests/ # Basic tests
-
+├── app/
+│   ├── app.py            # FastAPI application (entrypoint: app.app:app)
+│   ├── analyzer.py       # Core analysis engine
+│   ├── patterns.py       # Failure pattern definitions
+│   ├── llm.py            # Multi-provider LLM client (Ollama + Anthropic)
+│   ├── models.py         # Pydantic data models
+│   ├── config.py         # Pydantic settings
+│   ├── templates/        # HTML UI (Jinja2)
+│   └── static/           # CSS + JavaScript
+├── samples/
+│   └── example_design.md
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── README.md
+```
 
 ---
 
 ## API Overview
 
 - **POST `/api/analyze`**  
-  Analyze pasted text
+  Analyze pasted text (non-streaming)
+
+- **POST `/api/analyze/stream`**  
+  Analyze pasted text with Server-Sent Events for live progress updates
 
 - **POST `/api/upload`**  
-  Upload and analyze a document file
+  Upload and analyze a document file (.md, .txt, .rst, .adoc, .pdf)
 
 - **GET `/api/patterns`**  
   List available failure patterns
 
 - **GET `/api/health`**  
-  Service and Ollama health check
+  Service and LLM health check
 
-Detailed examples and curl commands are in the Quick Start guide.
+Detailed examples and curl commands are in [QUICKSTART.md](QUICKSTART.md).
 
 ---
+
+## Configuration
+
+Environment variables (compose sets sensible defaults):
+
+| Variable | Default | Description |
+|---|---|---|
+| `LLM_PROVIDER` | `ollama` | `ollama` or `anthropic` |
+| `OLLAMA_MODEL` | `llama3` | Ollama model name |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `OLLAMA_TIMEOUT` | `120` | Request timeout in seconds |
+| `ANTHROPIC_API_KEY` | _(empty)_ | Required when `LLM_PROVIDER=anthropic` |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Anthropic model ID |
+| `MAX_DOCUMENT_SIZE` | `50000` | Max input characters |
+| `CONFIDENCE_THRESHOLD` | `0.6` | Minimum match score to include a finding |
+| `MAX_FAILURE_MODES` | `10` | Maximum findings returned |
 
 ## Customization
 
 ### Add New Failure Patterns
-Edit `patterns.py` to add or tune failure archetypes.
+Edit `app/patterns.py` to add or tune failure archetypes. Each pattern is a `FailurePattern` with an `id`, `name`, `description`, `category`, `indicators` list, and `why_easy_to_miss` string.
 
 ### Adjust Analysis Behavior
 Modify `analyzer.py` to change:
@@ -146,18 +191,53 @@ Modify `analyzer.py` to change:
 - Analysis steps
 
 ### Change the LLM
-Second Opinion uses local models via Ollama.  
-Model selection is configurable via environment variables.
+Set `LLM_PROVIDER=ollama` and configure `OLLAMA_MODEL` for local inference, or set `LLM_PROVIDER=anthropic` with `ANTHROPIC_API_KEY` to use Claude.
 
 ---
 
-## Getting Started
+## Quick Start
 
-For installation, configuration, usage examples, and deployment:
+### Run with Docker Compose (recommended)
 
-👉 **See [Quick Reference Guide](QUICKSTART.md)**
+```bash
+docker compose up --build
+```
 
-You can be up and running in about five minutes.
+Then open: http://localhost:8000
+
+Services:
+- `ollama`: serves models at http://localhost:11434
+- `web`: FastAPI app at http://localhost:8000
+
+Select a model:
+```bash
+OLLAMA_MODEL=llama3 docker compose up --build
+```
+
+### Run locally without Docker
+
+```bash
+python -m venv venv
+venv\Scripts\activate   # or: source venv/bin/activate
+pip install -r requirements.txt
+
+# Start Ollama in another terminal and pull a model
+ollama serve
+ollama pull llama3
+
+# Start the app
+uvicorn app.app:app --reload
+```
+
+Open http://localhost:8000
+
+### Use Anthropic Claude instead of Ollama
+
+```bash
+export LLM_PROVIDER=anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+uvicorn app.app:app --reload
+```
 
 ---
 
@@ -167,10 +247,4 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
-## License
-
-MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-**Note:** Second Opinion assists in design reviews but does not guarantee correctness or completen
+**Note:** Second Opinion assists in design reviews but does not guarantee correctness or completeness. It surfaces potential failure modes based on known patterns — always apply human judgment to the results.
